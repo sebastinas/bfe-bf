@@ -1,5 +1,5 @@
-Bloom Filter Encryption library
-===============================
+Bloom Filter Encryption from Boneh-Franklin IBE
+===============================================
 
 This library implements bloom filter encryption (BFE) based on the paper [*Bloom Filter Encryption
 and Applications to Efficient Forward-Secret 0-RTT Key Exchange*](https://eprint.iacr.org/2018/199)
