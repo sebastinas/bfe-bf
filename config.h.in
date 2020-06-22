@@ -1,0 +1,13 @@
+#ifndef BFE_BF_CONFIG_H
+#define BFE_BF_CONFIG_H
+
+/* from cmake checks */
+
+/* available functions */
+#cmakedefine HAVE_EXPLICIT_BZERO
+
+/* from cmake settings */
+#cmakedefine MAX_BLOOMFILTER_HASH_COUNT @MAX_BLOOMFILTER_HASH_COUNT@
+#cmakedefine MAX_BFE_BF_KEY_SIZE @MAX_BFE_BF_KEY_SIZE@
+
+#endif

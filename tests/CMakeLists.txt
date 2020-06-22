@@ -1,0 +1,12 @@
+find_package(cgreen)
+if(cgreen_FOUND)
+  add_executable(bfe bfe.c)
+  target_link_libraries(bfe PRIVATE bfebf ${CGREEN_LIBRARIES})
+  target_include_directories(bfe PRIVATE ${CGREEN_INCLUDE_DIRS})
+  add_test(NAME BFE COMMAND bfe)
+
+  add_executable(crypto_api crypto_api.c)
+  target_link_libraries(crypto_api PRIVATE bfebf ${CGREEN_LIBRARIES})
+  target_include_directories(crypto_api PRIVATE ${CGREEN_INCLUDE_DIRS})
+  add_test(NAME crypto_api COMMAND crypto_api)
+endif()
