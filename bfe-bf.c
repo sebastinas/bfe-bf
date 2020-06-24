@@ -230,6 +230,8 @@ static void hash_and_xor(uint8_t* dst, size_t len, const uint8_t* input, fp12_t 
     const size_t l = MIN(len, 64);
 
     Keccak_HashSqueeze(&shake, buf, l * 8);
+    /* make use of SIMD instructions */
+#pragma omp simd
     for (size_t i = 0; i < l; ++i) {
       dst[i] = input[i] ^ buf[i];
     }
