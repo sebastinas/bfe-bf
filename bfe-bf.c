@@ -137,6 +137,9 @@ static void bf_clear(bloomfilter_t* filter) {
     bitset_clean(&filter->bitset);
   }
 }
+
+/* helper functions for (de)serialization */
+
 static void write_u32(uint8_t** dst, uint32_t v) {
   v = htole32(v);
   memcpy(*dst, &v, sizeof(v));
@@ -162,6 +165,8 @@ static uint64_t read_u64(const uint8_t** src) {
   *src += sizeof(v);
   return le64toh(v);
 }
+
+/* Boneh-Franklin IBE implementation */
 
 static int ibe_keygen(bn_t secret_key, bfe_bf_public_key_t* public_key) {
   int status = BFE_BF_SUCCESS;
@@ -300,6 +305,8 @@ static int ibe_decrypt(uint8_t* message, ep_t g1r, const uint8_t* Kxored, size_t
   return status;
 }
 
+/* relic setup */
+
 static bool core_init_run = false;
 
 __attribute__((constructor)) static void init_relic(void) {
@@ -323,6 +330,8 @@ __attribute__((destructor)) static void clean_relic(void) {
     core_clean();
   }
 }
+
+/* BFE implementation */
 
 int bfe_bf_init_secret_key(bfe_bf_secret_key_t* secret_key) {
   memset(secret_key, 0, sizeof(bfe_bf_secret_key_t));
