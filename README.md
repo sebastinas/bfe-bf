@@ -29,8 +29,10 @@ License
 -------
 
 The code is licensed under the CC0 license and was written by Sebastian Ramacher (AIT Austrian
-Institute of Technolgy) as part of [IoT4CPS](https://iot4cps.at). The IoT4CPS project is partially
-funded by the "ICT of the Future" Program of the FFG and the BMVIT.
+Institute of Technolgy). This work has been partially funded by the "ICT of the Future" Program of
+the FFG and the BMVIT as part of [IoT4CPS](https://iot4cps.at) and by the EU ECSEL Project
+[SECREDAS](https://secredas-project.eu/). This project has received funding from the European
+Union’s Horizon 2020 research and innovation programme under grant agreement No 783119.
 
 The SHAKE implementation is taken from [eXtended Keccak Code Package](https://github.com/XKCP/XKCP)
 which is also available under the CC0 license.
