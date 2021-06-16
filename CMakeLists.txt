@@ -52,6 +52,7 @@ configure_file(config.h.in config.h)
 
 add_library(bfebf SHARED
             bfe-bf.c
+            core.c
             crypto_api.c
             FIPS202-opt64/KeccakHash.c
             FIPS202-opt64/KeccakP-1600-opt64.c
