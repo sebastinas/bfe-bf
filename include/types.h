@@ -11,8 +11,6 @@
 
 #include <stdint.h>
 
-#include <relic/relic.h>
-
 typedef struct {
   uint64_t* bits;
   unsigned int size;
