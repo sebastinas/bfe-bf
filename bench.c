@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "include/bfe-bf.h"
+#include "include/tbfe-bbg.h"
 
 static void bench_bfe(void) {
   bfe_bf_secret_key_t sk;
@@ -15,23 +16,23 @@ static void bench_bfe(void) {
   bfe_bf_init_secret_key(&sk);
   bfe_bf_init_public_key(&pk);
   /* n=2^19 >= 2^12 per day for 3 months, correctness error ~ 2^-10 */
-  BENCH_ONCE("keygen", bfe_bf_keygen(&pk, &sk, 32, 1 << 19, 0.0009765625));
+  BENCH_ONCE("bfe keygen", bfe_bf_keygen(&pk, &sk, 32, 1 << 19, 0.0009765625));
 
   bfe_bf_ciphertext_t ciphertext;
   bfe_bf_init_ciphertext(&ciphertext, &pk);
 
   uint8_t K[32], decrypted[32];
-  BENCH_BEGIN("encrypt") {
+  BENCH_BEGIN("bfe encaps") {
     BENCH_ADD(bfe_bf_encaps(&ciphertext, K, &pk));
   }
   BENCH_END;
-  BENCH_BEGIN("decrypt") {
+  BENCH_BEGIN("bfe decaps") {
     bfe_bf_encaps(&ciphertext, K, &pk);
     memset(decrypted, 0, pk.key_size);
     BENCH_ADD(bfe_bf_decaps(decrypted, &pk, &sk, &ciphertext));
   }
   BENCH_END;
-  BENCH_BEGIN("puncture") {
+  BENCH_BEGIN("bfe punc") {
     bfe_bf_encaps(&ciphertext, K, &pk);
     BENCH_ADD(bfe_bf_puncture(&sk, &ciphertext));
   }
@@ -42,7 +43,62 @@ static void bench_bfe(void) {
   bfe_bf_clear_ciphertext(&ciphertext);
 }
 
+static void bench_tbfe(void) {
+  /* TODO: use sensible parameters */
+  static const unsigned int number_hash_functions = 4;
+  static const unsigned int bloom_filter_size     = 1000;
+  static const unsigned int cellsize              = 4;
+  static const unsigned int total_levels          = 4;
+  static const unsigned int total_depth           = total_levels + 2;
+
+  tbfe_bbg_secret_key_t sk;
+  tbfe_bbg_public_key_t pk;
+
+  tbfe_bbg_init_public_key(&pk, total_depth);
+  tbfe_bbg_init_secret_key(&sk, bloom_filter_size, cellsize, number_hash_functions);
+  BENCH_ONCE("tbfe keygen",
+             tbfe_bbg_keygen(&pk, &sk, bloom_filter_size, number_hash_functions, total_levels));
+
+  BENCH_BEGIN("tbfe encaps") {
+    uint8_t K[SECURITY_PARAMETER];
+    tbfe_bbg_ciphertext_t ciphertext;
+    tbfe_bbg_init_ciphertext(&ciphertext);
+    BENCH_ADD(tbfe_bbg_encaps(K, &ciphertext, &pk, 1));
+    tbfe_bbg_clear_ciphertext(&ciphertext);
+  }
+  BENCH_END;
+  BENCH_BEGIN("tbfe decaps") {
+    uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
+    tbfe_bbg_ciphertext_t ciphertext;
+    tbfe_bbg_init_ciphertext(&ciphertext);
+    tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
+    BENCH_ADD(tbfe_bbg_decaps(Kd, &ciphertext, &sk, &pk));
+    tbfe_bbg_clear_ciphertext(&ciphertext);
+  }
+  BENCH_END;
+
+  BENCH_BEGIN("tbfe punc ctxt") {
+    uint8_t K[SECURITY_PARAMETER];
+    tbfe_bbg_ciphertext_t ciphertext;
+    tbfe_bbg_init_ciphertext(&ciphertext);
+    tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
+    BENCH_ADD(tbfe_bbg_puncture_ciphertext(&sk, &ciphertext));
+    tbfe_bbg_clear_ciphertext(&ciphertext);
+  }
+  BENCH_END;
+
+  unsigned int time_interval = 1;
+  BENCH_BEGIN("tbfe punc interval") {
+    BENCH_ADD(tbfe_bbg_puncture_interval(&sk, &pk, time_interval++));
+  }
+  BENCH_END;
+
+  tbfe_bbg_clear_secret_key(&sk);
+  tbfe_bbg_clear_public_key(&pk);
+}
+
 int main() {
   bench_bfe();
+  bench_tbfe();
   return 0;
 }

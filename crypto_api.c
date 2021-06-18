@@ -1,5 +1,5 @@
 /*
- *  This file is part of the BFE-BF library.
+ *  This file is part of the BFE library.
  *  See the accompanying documentation for complete details.
  *
  *  The code is provided under the CC0 license, see LICENSE for more details.

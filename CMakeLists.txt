@@ -6,18 +6,19 @@ cmake_policy(SET CMP0063 NEW)
 cmake_policy(SET CMP0069 NEW)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Choose the type of build." FORCE)
 endif()
 
-project(bfe-bf LANGUAGES C VERSION 2.0 DESCRIPTION "Bloom Filter Encryption library with Boneh-Franklin IBE")
+project(bfe LANGUAGES C VERSION 2.0 DESCRIPTION "Bloom Filter Encryption library")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # settings
 set(MAX_BLOOMFILTER_HASH_COUNT 16 CACHE STRING "Maximal number of bloom filter hash functions.")
-set(MAX_BFE_BF_KEY_SIZE 32 CACHE STRING "Maximal size of encapsulated key.")
+set(MAX_BFE_KEY_SIZE 32 CACHE STRING "Maximal size of encapsulated key.")
 
 include(GNUInstallDirs)
 include(CheckCCompilerFlag)
@@ -45,45 +46,55 @@ check_ipo_supported(RESULT LTO_SUPPORTED)
 
 find_package(relic REQUIRED)
 find_package(Doxygen)
-find_package(OpenMP)
+find_package(OpenMP REQUIRED)
 
 # generate config.h
 configure_file(config.h.in config.h)
 
-add_library(bfebf SHARED
-            bfe-bf.c
-            core.c
-            crypto_api.c
-            FIPS202-opt64/KeccakHash.c
-            FIPS202-opt64/KeccakP-1600-opt64.c
-            FIPS202-opt64/KeccakSpongeWidth1600.c)
+list(APPEND BFE_SOURCES
+     FIPS202-opt64/KeccakHash.c
+     FIPS202-opt64/KeccakP-1600-opt64.c
+     FIPS202-opt64/KeccakSpongeWidth1600.c
+     bfe-bf.c
+     bloom.c
+     core.c
+     crypto_api.c
+     tbfe-bbg.c
+     vector.c)
 
-set_target_properties(bfebf PROPERTIES VERSION ${PROJECT_VERSION})
-set_target_properties(bfebf PROPERTIES C_VISIBILITY_PRESET hidden)
+add_library(bfe SHARED ${BFE_SOURCES})
+add_library(bfe_static STATIC ${BFE_SOURCES})
+target_compile_definitions(bfe_static PRIVATE BFE_STATIC)
+
+set_target_properties(bfe PROPERTIES VERSION ${PROJECT_VERSION})
+set_target_properties(bfe PROPERTIES C_VISIBILITY_PRESET hidden)
 if (LTO_SUPPORTED)
-  set_target_properties(bfebf PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+  set_target_properties(bfe PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 
-configure_file(bfe-bf.pc.in bfe-bf.pc @ONLY)
+configure_file(bfe.pc.in bfe.pc @ONLY)
 
-target_link_libraries(bfebf PUBLIC ${RELIC_LIBRARY})
-target_link_libraries(bfebf PRIVATE m)
-target_include_directories(bfebf PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
-if(OpenMP_C_FOUND)
-  target_link_libraries(bfebf PRIVATE OpenMP::OpenMP_C)
-endif()
+target_link_libraries(bfe PUBLIC ${RELIC_LIBRARY})
+target_link_libraries(bfe PRIVATE m)
+target_include_directories(bfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
+target_link_libraries(bfe PRIVATE OpenMP::OpenMP_C)
 
-install(TARGETS bfebf
-        EXPORT bfe-bf-targets
+target_link_libraries(bfe_static PUBLIC ${RELIC_LIBRARY})
+target_link_libraries(bfe_static PUBLIC m)
+target_include_directories(bfe_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
+target_link_libraries(bfe_static PUBLIC OpenMP::OpenMP_C)
+
+install(TARGETS bfe
+        EXPORT bfe-targets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES ${CMAKE_BINARY_DIR}/bfe-bf.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/bfe-bf)
-install(EXPORT bfe-bf-targets
-        NAMESPACE bfe-bf::
-        FILE bfe-bf-config.cmake
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/bfe-bf)
+install(FILES ${CMAKE_BINARY_DIR}/bfe.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/bfe)
+install(EXPORT bfe-targets
+        NAMESPACE bfe::
+        FILE bfe-config.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/bfe)
 
 if(DOXYGEN_FOUND)
   set(DOXYGEN_RECURSIVE NO)
@@ -100,7 +111,7 @@ endif()
 
 # benchmarks
 add_executable(bench bench.c)
-target_link_libraries(bench PRIVATE bfebf ${RELIC_LIBRARY})
+target_link_libraries(bench PRIVATE bfe ${RELIC_LIBRARY})
 
 # testing
 enable_testing()

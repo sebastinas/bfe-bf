@@ -1,18 +1,18 @@
 /*
- *  This file is part of the BFE-BF library.
+ *  This file is part of the BFE library.
  *  See the accompanying documentation for complete details.
  *
  *  The code is provided under the CC0 license, see LICENSE for more details.
  *  SPDX-License-Identifier: CC0-1.0
  */
 
-#ifndef BFE_BF_H
-#define BFE_BF_H
+#ifndef BFE_BFE_BF_H
+#define BFE_BFE_BF_H
 
 /**
  * @mainpage
  *
- * The BFE-BF library implements an IND-CCA secure puncturable key encapsulation mechanism from
+ * The BFE library implements an IND-CCA secure puncturable key encapsulation mechanism from
  * bloom filter encryption basedon the Boneh-Franklin IBE.
  *
  * In the following, we present the typical usage of the library including key generation,
@@ -180,15 +180,7 @@
 #include "macros.h"
 #include "types.h"
 
-#include <relic/relic.h>
 #include <stdint.h>
-
-typedef enum {
-  BFE_BF_SUCCESS             = 0, /**< All operations were successful */
-  BFE_BF_ERROR               = 1, /**< An error occurred */
-  BFE_BF_ERROR_INVALID_PARAM = 2, /**< An invalid parameter was given */
-  BFE_BF_ERROR_KEY_PUNCTURED = 3, /**< The key was already punctured */
-} bfe_bf_error_t;
 
 /**
  * BFE PKEM public key
@@ -223,29 +215,29 @@ typedef struct {
  * Initialize secret key.
  *
  * @param[out] secret_key the secret key
- * @return BFE_BF_SUCCESS or an error code on failure
+ * @return BFE_SUCCESS or an error code on failure
  */
-BFE_BF_VISIBLE int bfe_bf_init_secret_key(bfe_bf_secret_key_t* secret_key);
+BFE_VISIBLE int bfe_bf_init_secret_key(bfe_bf_secret_key_t* secret_key);
 /**
  * Clear secret key.
  *
  * @param[out] secret_key the secret key
  */
-BFE_BF_VISIBLE void bfe_bf_clear_secret_key(bfe_bf_secret_key_t* secret_key);
+BFE_VISIBLE void bfe_bf_clear_secret_key(bfe_bf_secret_key_t* secret_key);
 
 /**
  * Initialize public key.
  *
  * @param[out] public_key the public key
- * @return BFE_BF_SUCCESS or an error code on failure
+ * @return BFE_SUCCESS or an error code on failure
  */
-BFE_BF_VISIBLE int bfe_bf_init_public_key(bfe_bf_public_key_t* public_key);
+BFE_VISIBLE int bfe_bf_init_public_key(bfe_bf_public_key_t* public_key);
 /**
  * Clear public key.
  *
  * @param[out] public_key the public key
  */
-BFE_BF_VISIBLE void bfe_bf_clear_public_key(bfe_bf_public_key_t* public_key);
+BFE_VISIBLE void bfe_bf_clear_public_key(bfe_bf_public_key_t* public_key);
 
 /**
  * Sets up the Bloom Filter Encryption (bfe) scheme and create public and secret keys.
@@ -255,11 +247,11 @@ BFE_BF_VISIBLE void bfe_bf_clear_public_key(bfe_bf_public_key_t* public_key);
  * @param[in] key_length length of the encapsulated keys
  * @param[in] filter_element_number desired number of elements in the bloom filter
  * @param[in] false_positive_probability desired false positive probability of the bloom filter
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_keygen(bfe_bf_public_key_t* public_key, bfe_bf_secret_key_t* secret_key,
-                                 unsigned int key_length, unsigned int filter_element_number,
-                                 double false_positive_probability);
+BFE_VISIBLE int bfe_bf_keygen(bfe_bf_public_key_t* public_key, bfe_bf_secret_key_t* secret_key,
+                              unsigned int key_length, unsigned int filter_element_number,
+                              double false_positive_probability);
 
 /**
  * Generates a random key K and encapsulates it.
@@ -267,10 +259,10 @@ BFE_BF_VISIBLE int bfe_bf_keygen(bfe_bf_public_key_t* public_key, bfe_bf_secret_
  * @param[out] ciphertext the ciphertext
  * @param[out] K the randomly generated key
  * @param[in] public_key the public key
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_encaps(bfe_bf_ciphertext_t* ciphertext, uint8_t* K,
-                                 const bfe_bf_public_key_t* public_key);
+BFE_VISIBLE int bfe_bf_encaps(bfe_bf_ciphertext_t* ciphertext, uint8_t* K,
+                              const bfe_bf_public_key_t* public_key);
 
 /**
  * Punctures a secret key for the given ciphertext. After this action the secret key will not be
@@ -280,8 +272,7 @@ BFE_BF_VISIBLE int bfe_bf_encaps(bfe_bf_ciphertext_t* ciphertext, uint8_t* K,
  * @param[out] secret_key the secret key to be punctured
  * @param[in] ciphertext ciphertext for which the secret key is being punctured
  */
-BFE_BF_VISIBLE void bfe_bf_puncture(bfe_bf_secret_key_t* secret_key,
-                                    bfe_bf_ciphertext_t* ciphertext);
+BFE_VISIBLE void bfe_bf_puncture(bfe_bf_secret_key_t* secret_key, bfe_bf_ciphertext_t* ciphertext);
 
 /**
  * Decapsulates a given ciphertext. The secret key should not be already punctured with the same
@@ -291,27 +282,27 @@ BFE_BF_VISIBLE void bfe_bf_puncture(bfe_bf_secret_key_t* secret_key,
  * @param[in] public_key the public key
  * @param[in] secret_key the secret key to be used for decrypting
  * @param[in] ciphertext the ciphertext
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_decaps(uint8_t* key, const bfe_bf_public_key_t* public_key,
-                                 const bfe_bf_secret_key_t* secret_key,
-                                 bfe_bf_ciphertext_t* ciphertext);
+BFE_VISIBLE int bfe_bf_decaps(uint8_t* key, const bfe_bf_public_key_t* public_key,
+                              const bfe_bf_secret_key_t* secret_key,
+                              bfe_bf_ciphertext_t* ciphertext);
 
 /**
  * Init the ciphertext.
  *
  * @param[out] ciphertext the ciphertext
  * @param[in] public_key the pulic key
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_init_ciphertext(bfe_bf_ciphertext_t* ciphertext,
-                                          const bfe_bf_public_key_t* public_key);
+BFE_VISIBLE int bfe_bf_init_ciphertext(bfe_bf_ciphertext_t* ciphertext,
+                                       const bfe_bf_public_key_t* public_key);
 /**
  * Clear the ciphertext.
  *
  * @param[out] ciphertext the ciphertext
  */
-BFE_BF_VISIBLE void bfe_bf_clear_ciphertext(bfe_bf_ciphertext_t* ciphertext);
+BFE_VISIBLE void bfe_bf_clear_ciphertext(bfe_bf_ciphertext_t* ciphertext);
 
 /**
  * Calculates number of bytes needed to store a given ciphertext.
@@ -319,7 +310,7 @@ BFE_BF_VISIBLE void bfe_bf_clear_ciphertext(bfe_bf_ciphertext_t* ciphertext);
  * @param[in] ciphertext the ciphertext.
  * @return Number of bytes needed to store the ciphertext.
  */
-BFE_BF_VISIBLE unsigned int bfe_bf_ciphertext_size(const bfe_bf_ciphertext_t* ciphertext);
+BFE_VISIBLE unsigned int bfe_bf_ciphertext_size(const bfe_bf_ciphertext_t* ciphertext);
 
 /**
  * Writes a given ciphertext to a byte array.
@@ -327,16 +318,16 @@ BFE_BF_VISIBLE unsigned int bfe_bf_ciphertext_size(const bfe_bf_ciphertext_t* ci
  * @param[out] bin the ciphertext byte array.
  * @param[in] ciphertext the ciphertext.
  */
-BFE_BF_VISIBLE void bfe_bf_ciphertext_serialize(uint8_t* bin, const bfe_bf_ciphertext_t* ciphertext);
+BFE_VISIBLE void bfe_bf_ciphertext_serialize(uint8_t* bin, const bfe_bf_ciphertext_t* ciphertext);
 
 /**
  * Reads a given ciphertext stored as a byte array.
  *
  * @param[out] ciphertext the ciphertext
  * @param[in] bin the destination byte array.
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_ciphertext_deserialize(bfe_bf_ciphertext_t* ciphertext, const uint8_t* bin);
+BFE_VISIBLE int bfe_bf_ciphertext_deserialize(bfe_bf_ciphertext_t* ciphertext, const uint8_t* bin);
 
 /**
  * Calculates number of bytes needed to store a given secret key.
@@ -344,7 +335,7 @@ BFE_BF_VISIBLE int bfe_bf_ciphertext_deserialize(bfe_bf_ciphertext_t* ciphertext
  * @param[in] secret_key the secret key.
  * @return Number of bytes needed to store the secret key.
  */
-BFE_BF_VISIBLE unsigned int bfe_bf_secret_key_size(const bfe_bf_secret_key_t* secret_key);
+BFE_VISIBLE unsigned int bfe_bf_secret_key_size(const bfe_bf_secret_key_t* secret_key);
 
 /**
  * Writes a given secret key to a byte array.
@@ -352,23 +343,23 @@ BFE_BF_VISIBLE unsigned int bfe_bf_secret_key_size(const bfe_bf_secret_key_t* se
  * @param[out] bin the secret key byte array.
  * @param[in] secret_key the secret key.
  */
-BFE_BF_VISIBLE void bfe_bf_secret_key_serialize(uint8_t* bin, const bfe_bf_secret_key_t* secret_key);
+BFE_VISIBLE void bfe_bf_secret_key_serialize(uint8_t* bin, const bfe_bf_secret_key_t* secret_key);
 
 /**
  * Reads a given secret key stored as a byte array.
  *
  * @param[out] secret_key the secret key
  * @param[in] bin the destination byte array.
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_secret_key_deserialize(bfe_bf_secret_key_t* secret_key, const uint8_t* bin);
+BFE_VISIBLE int bfe_bf_secret_key_deserialize(bfe_bf_secret_key_t* secret_key, const uint8_t* bin);
 
 /**
  * Calculates number of bytes needed to store a given public key.
  *
  * @return Number of bytes needed to store the public key.
  */
-BFE_BF_VISIBLE unsigned int bfe_bf_public_key_size(void);
+BFE_VISIBLE unsigned int bfe_bf_public_key_size(void);
 
 /**
  * Writes a given public key to a byte array.
@@ -376,15 +367,15 @@ BFE_BF_VISIBLE unsigned int bfe_bf_public_key_size(void);
  * @param[out] bin the public key byte array.
  * @param[in] public_key the public key.
  */
-BFE_BF_VISIBLE void bfe_bf_public_key_serialize(uint8_t* bin, const bfe_bf_public_key_t* public_key);
+BFE_VISIBLE void bfe_bf_public_key_serialize(uint8_t* bin, const bfe_bf_public_key_t* public_key);
 
 /**
  * Reads a given public key stored as a byte array.
  *
  * @param[out] public_key the public key
  * @param[in] bin the destination byte array.
- * @return BFE_BF_SUCCESS or an error code on failure.
+ * @return BFE_SUCCESS or an error code on failure.
  */
-BFE_BF_VISIBLE int bfe_bf_public_key_deserialize(bfe_bf_public_key_t* public_key, const uint8_t* bin);
+BFE_VISIBLE int bfe_bf_public_key_deserialize(bfe_bf_public_key_t* public_key, const uint8_t* bin);
 
-#endif // BFE_BF_BFE_BF_H
+#endif // BFE_BFE_BE_H
