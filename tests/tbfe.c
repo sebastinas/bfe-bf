@@ -9,7 +9,7 @@ static const unsigned number_hash_functions = 4;
 static const unsigned bloom_filter_size     = 1000;
 static const unsigned cellsize              = 4;
 static const unsigned t                     = 4;
-static const unsigned total_depth           = t + 2;
+static const unsigned total_depth           = 4 + 2;
 
 Describe(TBFE);
 BeforeEach(TBFE) {}
