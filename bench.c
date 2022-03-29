@@ -133,8 +133,23 @@ static void bench_tbfe(void) {
   tbfe_bbg_clear_public_key(&pk);
 }
 
-int main() {
-  bench_bfe();
-  bench_tbfe();
+int main(int argc, char** argv) {
+  if (argc <= 1) {
+    bench_bfe();
+    bench_tbfe();
+    return 0;
+  }
+
+  for (int i = 1; i < argc; ++i) {
+    if (!strcmp(argv[i], "bfe")) {
+      bench_bfe();
+    } else if (!strcmp(argv[i], "tbfe")) {
+      bench_tbfe();
+    } else {
+      printf("Unknown benchmark: %s - valid benchmarks are bfe and tbfe.\n", argv[i]);
+      return 1;
+    }
+  }
+
   return 0;
 }
