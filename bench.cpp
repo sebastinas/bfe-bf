@@ -51,12 +51,12 @@ namespace {
     bfe_bf_keygen(&pk, &sk, 32, 1 << 19, 0.0009765625);
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
 
-    auto ciphertext =
-        make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
-
-    uint8_t K[32];
     microseconds encaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
+      uint8_t K[32];
+      auto ciphertext =
+          make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
+
       start_time = high_resolution_clock::now();
       bfe_bf_encaps(&ciphertext, K, &pk);
       encaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
@@ -64,6 +64,9 @@ namespace {
 
     microseconds decaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
+      uint8_t K[32];
+      auto ciphertext =
+          make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
       bfe_bf_encaps(&ciphertext, K, &pk);
 
       uint8_t decrypted[32];
@@ -74,7 +77,11 @@ namespace {
 
     microseconds punc_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
+      uint8_t K[32];
+      auto ciphertext =
+          make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
       bfe_bf_encaps(&ciphertext, K, &pk);
+
       start_time = high_resolution_clock::now();
       bfe_bf_puncture(&sk, &ciphertext);
       punc_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
