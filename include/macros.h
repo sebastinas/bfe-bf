@@ -32,4 +32,12 @@
 #endif
 #endif
 
+#ifdef __cplusplus
+#define BFE_BEGIN_CDECL extern "C" {
+#define BFE_END_CDECL }
+#else
+#define BFE_BEGIN_CDECL
+#define BFE_END_CDECL
+#endif
+
 #endif

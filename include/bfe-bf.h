@@ -182,6 +182,8 @@
 
 #include <stdint.h>
 
+BFE_BEGIN_CDECL
+
 /**
  * BFE PKEM public key
  */
@@ -377,5 +379,7 @@ BFE_VISIBLE void bfe_bf_public_key_serialize(uint8_t* bin, const bfe_bf_public_k
  * @return BFE_SUCCESS or an error code on failure.
  */
 BFE_VISIBLE int bfe_bf_public_key_deserialize(bfe_bf_public_key_t* public_key, const uint8_t* bin);
+
+BFE_END_CDECL
 
 #endif // BFE_BFE_BE_H

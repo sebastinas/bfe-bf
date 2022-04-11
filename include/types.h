@@ -9,12 +9,16 @@
 #ifndef BFE_TYPES_H
 #define BFE_TYPES_H
 
+#include "macros.h"
+
 #include <stdint.h>
 
 #include <omp.h>
 #include <relic/relic.h>
 
 #define SECURITY_PARAMETER 32
+
+BFE_BEGIN_CDECL
 
 /* error codes */
 
@@ -94,5 +98,7 @@ typedef struct {
   bbg_ots_pk_t ots_pk;
   unsigned int time_interval;
 } tbfe_bbg_ciphertext_t;
+
+BFE_END_CDECL
 
 #endif

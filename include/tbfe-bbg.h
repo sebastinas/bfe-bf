@@ -12,6 +12,8 @@
 #include "macros.h"
 #include "types.h"
 
+BFE_BEGIN_CDECL
+
 /**
  * Initialize a public key.
  *
@@ -217,5 +219,7 @@ BFE_VISIBLE unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* s
  * @return the size of the ciphertext.
  */
 BFE_VISIBLE unsigned tbfe_bbg_get_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext);
+
+BFE_END_CDECL
 
 #endif

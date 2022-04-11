@@ -11,6 +11,8 @@
 
 #include "macros.h"
 
+BFE_BEGIN_CDECL
+
 /** Size of the public key */
 #define CRYPTO_PUBLICKEYBYTES 109
 /** Size of the secret key */
@@ -54,5 +56,7 @@ BFE_VISIBLE int crypto_kem_dec(unsigned char* k, const unsigned char* c, const u
  * @return 0 on success, non-0 otherwise
  */
 BFE_VISIBLE int crypto_kem_punc(unsigned char* sk, const unsigned char* c);
+
+BFE_END_CDECL
 
 #endif
