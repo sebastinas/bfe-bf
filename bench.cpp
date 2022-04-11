@@ -147,18 +147,21 @@ namespace {
     microseconds decaps_serialize_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
-      auto ciphertext =
-          make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
 
-      tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
-      serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(&ciphertext));
-      tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), &ciphertext);
+      {
+        auto ciphertext =
+            make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
+        tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
+        serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(&ciphertext));
+        tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), &ciphertext);
+      }
 
-      start_time = high_resolution_clock::now();
-      auto ciphertext2 =
-          make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
+      start_time      = high_resolution_clock::now();
+      auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext_from_serialized,
+                                                           tbfe_bbg_clear_ciphertext,
+                                                           serialized_ciphertext.data());
 
-      tbfe_bbg_decaps(Kd, &ciphertext2, &sk, &pk);
+      tbfe_bbg_decaps(Kd, &ciphertext, &sk, &pk);
       decaps_serialize_time +=
           duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
