@@ -28,14 +28,14 @@ namespace {
     bfe_bf_init_ciphertext(&ciphertext, &pk);
 
     uint8_t K[32];
-    microseconds encaps_time;
+    microseconds encaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       start_time = high_resolution_clock::now();
       bfe_bf_encaps(&ciphertext, K, &pk);
       encaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
-    microseconds decaps_time;
+    microseconds decaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       bfe_bf_encaps(&ciphertext, K, &pk);
 
@@ -45,7 +45,7 @@ namespace {
       decaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
-    microseconds punc_time;
+    microseconds punc_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       bfe_bf_encaps(&ciphertext, K, &pk);
       start_time = high_resolution_clock::now();
@@ -82,7 +82,7 @@ namespace {
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
 
     /* benchmark encaps */
-    microseconds encaps_time;
+    microseconds encaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[SECURITY_PARAMETER];
       tbfe_bbg_ciphertext_t ciphertext;
@@ -93,7 +93,7 @@ namespace {
       tbfe_bbg_clear_ciphertext(&ciphertext);
     }
     /* benchmark encaps + serialization */
-    microseconds encaps_serialize_time;
+    microseconds encaps_serialize_time{0};
     std::vector<uint8_t> serialized_ciphertext;
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[SECURITY_PARAMETER];
@@ -109,7 +109,7 @@ namespace {
     }
 
     /* benchmark decaps */
-    microseconds decaps_time;
+    microseconds decaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
       tbfe_bbg_ciphertext_t ciphertext;
@@ -120,7 +120,7 @@ namespace {
       decaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
       tbfe_bbg_clear_ciphertext(&ciphertext);
     }
-    microseconds decaps_serialize_time;
+    microseconds decaps_serialize_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
       tbfe_bbg_ciphertext_t ciphertext;
@@ -139,7 +139,7 @@ namespace {
       tbfe_bbg_clear_ciphertext(&ciphertext);
     }
 
-    microseconds punc_time;
+    microseconds punc_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[SECURITY_PARAMETER];
       tbfe_bbg_ciphertext_t ciphertext;
@@ -151,12 +151,12 @@ namespace {
       tbfe_bbg_clear_ciphertext(&ciphertext);
     }
 
-    microseconds punc_interval_time;
+    microseconds punc_interval_time{0};
     unsigned int time_interval = 1;
     for (unsigned int i = 0; i < REPEATS; ++i, ++time_interval) {
       start_time = high_resolution_clock::now();
       tbfe_bbg_puncture_interval(&sk, &pk, time_interval);
-      punc_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
+      punc_interval_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
     tbfe_bbg_clear_secret_key(&sk);
@@ -166,7 +166,7 @@ namespace {
     std::cout << "tbfe encaps:          " << encaps_time.count() / REPEATS << " ms\n";
     std::cout << "tbfe encaps (+ ser):  " << encaps_serialize_time.count() / REPEATS << " ms\n";
     std::cout << "tbfe decaps:          " << decaps_time.count() / REPEATS << " ms\n";
-    std::cout << "tbfe decaps (+ +ser): " << decaps_serialize_time.count() / REPEATS << " ms\n";
+    std::cout << "tbfe decaps (+ ser):  " << decaps_serialize_time.count() / REPEATS << " ms\n";
     std::cout << "tbfe punc:            " << punc_time.count() / REPEATS << " ms\n";
     std::cout << "tbfe punc (interval): " << punc_interval_time.count() / REPEATS << " ms\n";
   }
