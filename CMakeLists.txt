@@ -11,10 +11,12 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Choose the type of build." FORCE)
 endif()
 
-project(bfe LANGUAGES C VERSION 2.0 DESCRIPTION "Bloom Filter Encryption library")
+project(bfe LANGUAGES C CXX VERSION 2.0 DESCRIPTION "Bloom Filter Encryption library")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # settings
 set(MAX_BLOOMFILTER_HASH_COUNT 16 CACHE STRING "Maximal number of bloom filter hash functions.")
@@ -36,7 +38,6 @@ endfunction()
 check_c_compiler_flag_and_add(-Wall CC_SUPPORTS_WALL)
 check_c_compiler_flag_and_add(-Wextra CC_SUPPORTS_WEXTRA)
 check_c_compiler_flag_and_add(-Wshadow CC_SUPPORTS_WSHADOW)
-check_c_compiler_flag_and_add(-Werror=implicit-function-declaration CC_SUPPORTS_WERROR_IMPLICIT_FUNCTION_DECLARATION)
 check_c_compiler_flag_and_add(-Werror=vla CC_SUPPORTS_WERROR_VLA)
 
 # check availability of some functions
@@ -110,7 +111,7 @@ if(DOXYGEN_FOUND)
 endif()
 
 # benchmarks
-add_executable(bench bench.c)
+add_executable(bench bench.cpp)
 target_link_libraries(bench PRIVATE bfe ${RELIC_LIBRARY})
 
 # testing
