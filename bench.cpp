@@ -1,5 +1,6 @@
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -13,33 +14,15 @@ using std::chrono::microseconds;
 namespace {
   constexpr unsigned int REPEATS = 50;
 
-  template <class T, class D>
-  class holder {
-    T value_;
-    D deleter_;
-
-  public:
-    template <class I, class... Args>
-    holder(I i, D d, Args&&... args) : deleter_{d} {
-      i(&value_, std::forward<Args>(args)...);
-    }
-
-    ~holder() {
-      deleter_(&value_);
-    }
-
-    T* operator&() {
-      return &value_;
-    }
-
-    const T* operator&() const {
-      return &value_;
-    }
-  };
-
   template <class T, class I, class D, class... Args>
-  holder<T, D> make_holder(I i, D d, Args&&... args) {
-    return {i, d, std::forward<Args>(args)...};
+  auto make_holder(I i, D d, Args&&... args) {
+    auto deleter = [d](T* value) {
+      d(value);
+      delete value;
+    };
+    std::unique_ptr<T, decltype(deleter)> h{new T, deleter};
+    i(h.get(), std::forward<Args>(args)...);
+    return h;
   }
 
   void bench_bfe() {
@@ -48,42 +31,42 @@ namespace {
 
     auto start_time = high_resolution_clock::now();
     /* n=2^19 >= 2^12 per day for 3 months, correctness error ~ 2^-10 */
-    bfe_bf_keygen(&pk, &sk, 32, 1 << 19, 0.0009765625);
+    bfe_bf_keygen(pk.get(), sk.get(), 32, 1 << 19, 0.0009765625);
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
 
     microseconds encaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[32];
-      auto ciphertext =
-          make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
+      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext,
+                                                         bfe_bf_clear_ciphertext, pk.get());
 
       start_time = high_resolution_clock::now();
-      bfe_bf_encaps(&ciphertext, K, &pk);
+      bfe_bf_encaps(ciphertext.get(), K, pk.get());
       encaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
     microseconds decaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[32];
-      auto ciphertext =
-          make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
-      bfe_bf_encaps(&ciphertext, K, &pk);
+      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext,
+                                                         bfe_bf_clear_ciphertext, pk.get());
+      bfe_bf_encaps(ciphertext.get(), K, pk.get());
 
       uint8_t decrypted[32];
       start_time = high_resolution_clock::now();
-      bfe_bf_decaps(decrypted, &pk, &sk, &ciphertext);
+      bfe_bf_decaps(decrypted, pk.get(), sk.get(), ciphertext.get());
       decaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
     microseconds punc_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
       uint8_t K[32];
-      auto ciphertext =
-          make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, bfe_bf_clear_ciphertext, &pk);
-      bfe_bf_encaps(&ciphertext, K, &pk);
+      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext,
+                                                         bfe_bf_clear_ciphertext, pk.get());
+      bfe_bf_encaps(ciphertext.get(), K, pk.get());
 
       start_time = high_resolution_clock::now();
-      bfe_bf_puncture(&sk, &ciphertext);
+      bfe_bf_puncture(sk.get(), ciphertext.get());
       punc_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
@@ -109,7 +92,7 @@ namespace {
 
     /* benchmark key generation */
     auto start_time = high_resolution_clock::now();
-    tbfe_bbg_keygen(&pk, &sk, bloom_filter_size, number_hash_functions, total_levels);
+    tbfe_bbg_keygen(pk.get(), sk.get(), bloom_filter_size, number_hash_functions, total_levels);
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
 
     /* benchmark encaps */
@@ -120,7 +103,7 @@ namespace {
           make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
 
       start_time = high_resolution_clock::now();
-      tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
+      tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       encaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
     /* benchmark encaps + serialization */
@@ -132,9 +115,9 @@ namespace {
           make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
 
       start_time = high_resolution_clock::now();
-      tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
-      serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(&ciphertext));
-      tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), &ciphertext);
+      tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
+      serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(ciphertext.get()));
+      tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), ciphertext.get());
       encaps_serialize_time +=
           duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
@@ -146,9 +129,9 @@ namespace {
       auto ciphertext =
           make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
 
-      tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
+      tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       start_time = high_resolution_clock::now();
-      tbfe_bbg_decaps(Kd, &ciphertext, &sk, &pk);
+      tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
       decaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
     microseconds decaps_serialize_time{0};
@@ -158,9 +141,9 @@ namespace {
       {
         auto ciphertext =
             make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
-        tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
-        serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(&ciphertext));
-        tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), &ciphertext);
+        tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
+        serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(ciphertext.get()));
+        tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), ciphertext.get());
       }
 
       start_time      = high_resolution_clock::now();
@@ -168,7 +151,7 @@ namespace {
                                                            tbfe_bbg_clear_ciphertext,
                                                            serialized_ciphertext.data());
 
-      tbfe_bbg_decaps(Kd, &ciphertext, &sk, &pk);
+      tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
       decaps_serialize_time +=
           duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
@@ -179,9 +162,9 @@ namespace {
       auto ciphertext =
           make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext, tbfe_bbg_clear_ciphertext);
 
-      tbfe_bbg_encaps(K, &ciphertext, &pk, 1);
+      tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       start_time = high_resolution_clock::now();
-      tbfe_bbg_puncture_ciphertext(&sk, &ciphertext);
+      tbfe_bbg_puncture_ciphertext(sk.get(), ciphertext.get());
       punc_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
@@ -189,7 +172,7 @@ namespace {
     unsigned int time_interval = 1;
     for (unsigned int i = 0; i < REPEATS; ++i, ++time_interval) {
       start_time = high_resolution_clock::now();
-      tbfe_bbg_puncture_interval(&sk, &pk, time_interval);
+      tbfe_bbg_puncture_interval(sk.get(), pk.get(), time_interval);
       punc_interval_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
