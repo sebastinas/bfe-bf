@@ -66,6 +66,9 @@ list(APPEND BFE_SOURCES
 add_library(bfe SHARED ${BFE_SOURCES})
 add_library(bfe_static STATIC ${BFE_SOURCES})
 target_compile_definitions(bfe_static PRIVATE BFE_STATIC)
+if (LTO_SUPPORTED)
+  set_target_properties(bfe_static PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
 
 set_target_properties(bfe PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(bfe PROPERTIES C_VISIBILITY_PRESET hidden)
@@ -112,7 +115,10 @@ endif()
 
 # benchmarks
 add_executable(bench bench.cpp)
-target_link_libraries(bench PRIVATE bfe ${RELIC_LIBRARY})
+target_link_libraries(bench PRIVATE bfe_static)
+if (LTO_SUPPORTED)
+  set_target_properties(bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
 
 # testing
 enable_testing()
