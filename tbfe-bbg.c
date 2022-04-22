@@ -176,7 +176,7 @@ static void bbg_clear_public_key(bbg_public_key_t* pk) {
 }
 
 static int bbg_init_public_params(bbg_public_params_t* params, unsigned int depth) {
-  if (!params || !depth) {
+  if (!params || depth < 3) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -1453,9 +1453,9 @@ error:
   return ret;
 }
 
-int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key,
-                    unsigned total_levels) {
-  if (!public_key || !secret_key || !secret_key->bloom_filter.bitset.size) {
+int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key) {
+  if (!public_key || !secret_key || !secret_key->bloom_filter.bitset.size ||
+      public_key->params.max_delegatable_depth < 2) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -1465,6 +1465,7 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
+  const unsigned int total_levels          = public_key->params.max_delegatable_depth - 1;
   const unsigned int number_hash_functions = secret_key->bloom_filter.hash_count;
   const unsigned int bloom_filter_size     = secret_key->bloom_filter.bitset.size;
 

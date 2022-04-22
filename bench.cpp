@@ -134,8 +134,7 @@ namespace {
   void bench_tbfe() {
     /* TODO: use sensible parameters */
     constexpr unsigned int bloom_filter_size = 1 << 10;
-    constexpr unsigned int total_levels      = 4;
-    constexpr unsigned int total_depth       = total_levels + 2;
+    constexpr unsigned int total_depth       = 4 + 2;
 
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
                                                  0.0009765625);
@@ -143,7 +142,7 @@ namespace {
 
     /* benchmark key generation */
     auto start_time = high_resolution_clock::now();
-    tbfe_bbg_keygen(pk.get(), sk.get(), total_levels);
+    tbfe_bbg_keygen(pk.get(), sk.get());
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
 
     /* benchmark encaps */

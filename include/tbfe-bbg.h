@@ -101,12 +101,11 @@ BFE_VISIBLE void tbfe_bbg_clear_ciphertext(tbfe_bbg_ciphertext_t* ciphertext);
  *
  * @param[out] public_key               - the newly generated public key
  * @param[out] secret_key               - the newly generated secret key
- * @param[in] total_levels              - the total levels (t)
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
 BFE_VISIBLE int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key,
-                                tbfe_bbg_secret_key_t* secret_key, unsigned total_levels);
+                                tbfe_bbg_secret_key_t* secret_key);
 
 /**
  * Generates a new session key and outputs it together with an encapsulation of the key under the
