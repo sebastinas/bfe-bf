@@ -3,8 +3,6 @@
 #include "core.h"
 #include "utils.h"
 
-#include "FIPS202-opt64/KeccakHash.h"
-
 #include <config.h>
 #include <math.h>
 #include <stdbool.h>
@@ -16,103 +14,6 @@
 #define EP2_SIZE (1 + 4 * RLC_FP_BYTES)
 #define FP12_SIZE (12 * RLC_FP_BYTES)
 
-/* bitset implementation */
-
-#define BITSET_WORD_BITS (8 * sizeof(uint64_t))
-#define BITSET_SIZE(size) (((size) + BITSET_WORD_BITS - 1) / BITSET_WORD_BITS)
-
-/**
- * Creates a bitset with the given number of bits.
- *
- * @param size the number of bits.
- * @return The initialized bitset with all bits set to 0.
- */
-static inline bitset_t bitset_init(unsigned int size) {
-  return (bitset_t){.bits = calloc(BITSET_SIZE(size), sizeof(uint64_t)), .size = size};
-}
-
-/**
- * Sets a specific bit of a bitset.
- *
- * @param bitset the bitset.
- * @param index  the index of the bit supposed to be set to 1.
- */
-static inline void bitset_set(bitset_t* bitset, unsigned int index) {
-  bitset->bits[index / BITSET_WORD_BITS] |= (UINT64_C(1) << (index & (BITSET_WORD_BITS - 1)));
-}
-
-/**
- * Retrieves a specific bit of a bitset.
- *
- * @param bitset the bitset.
- * @param index  the index of the bit in question.
- * @return non-0 if the bit is set, 0 otherwise
- */
-static inline uint64_t bitset_get(const bitset_t* bitset, unsigned int index) {
-  return bitset->bits[index / BITSET_WORD_BITS] & (UINT64_C(1) << (index & (BITSET_WORD_BITS - 1)));
-}
-
-/**
- * Computes the number of set bits of a bitset.
- *
- * @param bitset the bitset.
- * @return number of set bits
- */
-static inline unsigned int bitset_popcount(const bitset_t* bitset) {
-  unsigned int bits = 0;
-  for (unsigned int idx = 0; idx != BITSET_SIZE(bitset->size); ++idx) {
-    bits += __builtin_popcount(bitset->bits[idx]);
-  }
-  return bits;
-}
-
-/**
- * Frees the memory allocated by the bitset.
- *
- * @param bitset the bitset.
- */
-static inline void bitset_clean(bitset_t* bitset) {
-  if (bitset) {
-    free(bitset->bits);
-    bitset->bits = NULL;
-    bitset->size = 0;
-  }
-}
-
-/* bloom filter implementation */
-static unsigned int get_needed_size(unsigned int n, double false_positive_prob) {
-  return -floor((n * log(false_positive_prob)) / (log(2) * log(2)));
-}
-
-static bloomfilter_t bf_init_fixed(unsigned int size, unsigned int hash_count) {
-  return (bloomfilter_t){.hash_count = hash_count, .bitset = bitset_init(size)};
-}
-
-static bloomfilter_t bf_init(unsigned int n, double false_positive_prob) {
-  const unsigned int bitset_size = get_needed_size(n, false_positive_prob);
-
-  return (bloomfilter_t){.hash_count = ceil((bitset_size / (double)n) * log(2)),
-                         .bitset     = bitset_init(bitset_size)};
-}
-
-static unsigned int get_position(uint32_t hash_idx, const uint8_t* input, size_t input_len,
-                                 unsigned int filter_size) {
-  static const uint8_t domain[] = "BF_HASH";
-
-  Keccak_HashInstance shake;
-  Keccak_HashInitialize_SHAKE128(&shake);
-
-  Keccak_HashUpdate(&shake, domain, sizeof(domain) * 8);
-  hash_idx = htole32(hash_idx);
-  Keccak_HashUpdate(&shake, (const uint8_t*)&hash_idx, sizeof(hash_idx) * 8);
-  Keccak_HashUpdate(&shake, input, input_len * 8);
-  Keccak_HashFinal(&shake, NULL);
-
-  uint64_t output = 0;
-  Keccak_HashSqueeze(&shake, (uint8_t*)&output, sizeof(output) * 8);
-  return le64toh(output) % filter_size;
-}
-
 static void bf_get_bit_positions(unsigned int* positions, const ep_t input, unsigned int hash_count,
                                  unsigned int filter_size) {
   const unsigned int buffer_size = ep_size_bin(input, 0);
@@ -120,13 +21,7 @@ static void bf_get_bit_positions(unsigned int* positions, const ep_t input, unsi
   ep_write_bin(buffer, buffer_size, input, 0);
 
   for (unsigned int i = 0; i < hash_count; ++i) {
-    positions[i] = get_position(i, buffer, buffer_size, filter_size);
-  }
-}
-
-static void bf_clear(bloomfilter_t* filter) {
-  if (filter) {
-    bitset_clean(&filter->bitset);
+    positions[i] = bf_get_position(i, buffer, buffer_size, filter_size);
   }
 }
 

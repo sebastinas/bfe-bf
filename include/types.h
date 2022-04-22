@@ -29,7 +29,7 @@ typedef enum {
   BFE_ERROR_KEY_PUNCTURED = 3, /**< The key was already punctured */
 } bfe_bf_error_t;
 
-/* bloom filter for BFE */
+/* bloom filter */
 
 typedef struct {
   uint64_t* bits;
@@ -40,11 +40,6 @@ typedef struct _bloomfilter_t {
   unsigned int hash_count;
   bitset_t bitset;
 } bloomfilter_t;
-
-/* bloom filter for TBFE */
-
-struct bloom_filter;
-typedef struct bloom_filter* bloom_t;
 
 struct vector;
 typedef struct vector vector_t;
@@ -84,7 +79,7 @@ typedef struct {
 } tbfe_bbg_public_key_t;
 
 typedef struct {
-  bloom_t bloom_filter;
+  bloomfilter_t bloom_filter;
   omp_lock_t bloom_filter_mutex;
   vector_t* sk_bloom;
   vector_t* sk_time;

@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <math.h>
 #include <omp.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1140,14 +1141,14 @@ void tbfe_bbg_clear_public_key(tbfe_bbg_public_key_t* public_key) {
 }
 
 int tbfe_bbg_init_secret_key(tbfe_bbg_secret_key_t* secret_key, unsigned int bloom_filter_size,
-                             unsigned int cellsize, unsigned int number_hash_functions) {
+                             double false_positive_prob) {
   if (!secret_key) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
   int err = BFE_SUCCESS;
 
-  secret_key->bloom_filter = bloom_init(bloom_filter_size, cellsize, number_hash_functions);
+  secret_key->bloom_filter = bf_init(bloom_filter_size, false_positive_prob);
   omp_init_lock(&secret_key->bloom_filter_mutex);
   secret_key->sk_bloom      = vector_new(bloom_filter_size);
   secret_key->sk_time       = vector_new(3);
@@ -1168,11 +1169,15 @@ int tbfe_bbg_init_secret_key_from_serialized(tbfe_bbg_secret_key_t* secret_key,
 
   const unsigned int sk_bloom_count = read_u32(&src);
   const unsigned int sk_time_count  = read_u32(&src);
-  const unsigned int bloom_size     = read_u32(&src);
   secret_key->next_interval         = read_u32(&src);
 
-  secret_key->bloom_filter = bloom_init_deserialize(src);
-  src += bloom_size;
+  const unsigned int hash_count  = read_u32(&src);
+  const unsigned int filter_size = read_u32(&src);
+
+  secret_key->bloom_filter = bf_init_fixed(filter_size, hash_count);
+  for (unsigned int i = 0; i < BITSET_SIZE(secret_key->bloom_filter.bitset.size); ++i) {
+    secret_key->bloom_filter.bitset.bits[i] = read_u64(&src);
+  }
 
   secret_key->sk_bloom = vector_new(sk_bloom_count);
   secret_key->sk_time  = vector_new(sk_time_count);
@@ -1205,7 +1210,7 @@ void tbfe_bbg_clear_secret_key(tbfe_bbg_secret_key_t* secret_key) {
     tbfe_bbg_vector_secret_key_free(secret_key->sk_bloom);
     tbfe_bbg_vector_secret_key_free(secret_key->sk_time);
 
-    bloom_free(secret_key->bloom_filter);
+    bf_clear(&secret_key->bloom_filter);
     omp_destroy_lock(&secret_key->bloom_filter_mutex);
     secret_key->next_interval = 0;
   }
@@ -1332,17 +1337,18 @@ void tbfe_bbg_serialize_public_key(uint8_t* serialized, tbfe_bbg_public_key_t* p
 }
 
 void tbfe_bbg_serialize_secret_key(uint8_t* serialized, tbfe_bbg_secret_key_t* secret_key) {
-  unsigned bloom_size     = bloom_get_size(secret_key->bloom_filter);
   unsigned sk_bloom_count = vector_size(secret_key->sk_bloom);
   unsigned sk_time_count  = vector_size(secret_key->sk_time);
 
   write_u32(&serialized, sk_bloom_count);
   write_u32(&serialized, sk_time_count);
-  write_u32(&serialized, bloom_size);
   write_u32(&serialized, secret_key->next_interval);
 
-  bloom_serialize(serialized, secret_key->bloom_filter);
-  serialized += bloom_size;
+  write_u32(&serialized, secret_key->bloom_filter.hash_count);
+  write_u32(&serialized, secret_key->bloom_filter.bitset.size);
+  for (unsigned int i = 0; i < BITSET_SIZE(secret_key->bloom_filter.bitset.size); ++i) {
+    write_u64(&serialized, secret_key->bloom_filter.bitset.bits[i]);
+  }
 
   for (size_t i = 0; i < sk_bloom_count; ++i) {
     bbg_secret_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
@@ -1393,11 +1399,11 @@ unsigned tbfe_bbg_get_public_key_size(const tbfe_bbg_public_key_t* public_key) {
 }
 
 unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
-  unsigned bloom_size     = bloom_get_size(secret_key->bloom_filter);
-  unsigned sk_bloom_count = vector_size(secret_key->sk_bloom);
-  unsigned sk_time_count  = vector_size(secret_key->sk_time);
+  unsigned int sk_bloom_count = vector_size(secret_key->sk_bloom);
+  unsigned int sk_time_count  = vector_size(secret_key->sk_time);
 
-  unsigned total_size = bloom_size;
+  unsigned int total_size =
+      5 * sizeof(uint32_t) + BITSET_SIZE(secret_key->bloom_filter.bitset.size) * sizeof(uint64_t);
   for (size_t i = 0; i < sk_bloom_count; ++i) {
     bbg_secret_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
     if (sk_bloom_i != NULL) {
@@ -1409,7 +1415,7 @@ unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
     bbg_secret_key_t* sk_time_i = vector_get(secret_key->sk_time, i);
     total_size += bbg_get_secret_key_size(sk_time_i) + sizeof(uint32_t);
   }
-  return total_size + 4 * sizeof(uint32_t);
+  return total_size;
 }
 
 unsigned tbfe_bbg_get_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
@@ -1448,9 +1454,8 @@ error:
 }
 
 int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key,
-                    unsigned bloom_filter_size, unsigned number_hash_functions,
                     unsigned total_levels) {
-  if (!public_key || !secret_key || !bloom_filter_size || !number_hash_functions) {
+  if (!public_key || !secret_key || !secret_key->bloom_filter.bitset.size) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -1459,6 +1464,9 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
   if (result_status) {
     goto clear;
   }
+
+  const unsigned int number_hash_functions = secret_key->bloom_filter.hash_count;
+  const unsigned int bloom_filter_size     = secret_key->bloom_filter.bitset.size;
 
   // We want to have a t + 1 level HIBE, but due to CHK compiler approach
   // used in the CCA secure variant of BBG-HIBE, we need to setup with t + 2.
@@ -1611,7 +1619,7 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   // Derive the identities from the random c with the hash functions of the bloom filter.
   for (size_t i = 0; i < k; ++i) {
     identity_tau_i.id[tau_i_depth - 1] =
-        bloom_get_position(i, ciphertext->c, SECURITY_PARAMETER, public_key->bloom_filter_size);
+        bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, public_key->bloom_filter_size);
 
     bbg_ciphertext_t* ct = malloc(sizeof(*ct));
     result_status        = bbg_init_ciphertext(ct);
@@ -1689,31 +1697,33 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
     goto clear_key;
   }
 
-  // The ciphertext can not be decapsulated if all secret keys for which the
-  // ciphertext was encapsulated are deleted. This is the case if check for
-  // this c returns true. If it returns 0 there must be a secret key with
-  // which the ciphertext can be decapsulated.
   omp_set_lock(&secret_key->bloom_filter_mutex);
-  if (bloom_check(secret_key->bloom_filter, ciphertext->c, SECURITY_PARAMETER)) {
-    result_status = BFE_ERROR;
-    goto clear;
-  }
 
   int decapsulating_identity_index = -1;
   unsigned decapsulating_identity  = 0;
 
   // Derive the identities under which this ciphertext was encapsulated and mark
   // the first identity for which the secret key has not been punctured yet.
-  const unsigned k = secret_key->bloom_filter->hashes;
+  const unsigned k = secret_key->bloom_filter.hash_count;
   for (size_t i = 0; i < k; ++i) {
     const unsigned int hash =
-        bloom_get_position(i, ciphertext->c, SECURITY_PARAMETER, secret_key->bloom_filter->cells);
-    if (vector_get(secret_key->sk_bloom, hash) != NULL) {
+        bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, secret_key->bloom_filter.bitset.size);
+    if (bitset_get(&secret_key->bloom_filter.bitset, hash) == 0 &&
+        vector_get(secret_key->sk_bloom, hash) != NULL) {
       decapsulating_identity_index  = i;
       decapsulating_identity        = hash;
       tau_prime.id[tau_i_depth - 1] = hash;
       break;
     }
+  }
+
+  // The ciphertext can not be decapsulated if all secret keys for which the
+  // ciphertext was encapsulated are deleted. This is the case if check for
+  // this c returns true. If it returns 0 there must be a secret key with
+  // which the ciphertext can be decapsulated.
+  if (decapsulating_identity_index == -1) {
+    result_status = BFE_ERROR;
+    goto clear;
   }
 
   bbg_secret_key_t* sk_id         = vector_get(secret_key->sk_bloom, decapsulating_identity);
@@ -1730,7 +1740,7 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   result_status = bbg_decapsulate(&_key, ciphertext_id, sk_id, &ciphertext->ots_pk,
                                   &public_key->params, &tau_prime);
   if (result_status) {
-    bloom_remove(secret_key->bloom_filter, ciphertext->c, SECURITY_PARAMETER);
+    // This case should never happen if we have a key
     goto clear;
   }
 
@@ -1754,40 +1764,23 @@ int tbfe_bbg_puncture_ciphertext(tbfe_bbg_secret_key_t* secret_key,
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  int result_status = BFE_SUCCESS;
-
-  // Add c to the bloom filter.
   omp_set_lock(&secret_key->bloom_filter_mutex);
-  if (!bloom_add(secret_key->bloom_filter, ciphertext->c, SECURITY_PARAMETER)) {
-    omp_unset_lock(&secret_key->bloom_filter_mutex);
-    return BFE_ERROR;
-  } else {
-    omp_unset_lock(&secret_key->bloom_filter_mutex);
-  }
+  // Add c to the bloom filter.
+  for (unsigned int i = 0; i < secret_key->bloom_filter.hash_count; ++i) {
+    unsigned int pos =
+        bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, secret_key->bloom_filter.bitset.size);
+    bitset_set(&secret_key->bloom_filter.bitset, pos);
 
-  const uint8_t* T = secret_key->bloom_filter->bitarray;
-
-  // Iterate through the bloom filter and delete any secret keys for identities for
-  // which the bloom filter is set to 1.
-  for (size_t i = 0; i < secret_key->bloom_filter->cells; ++i) {
-    bbg_secret_key_t* sk = vector_get(secret_key->sk_bloom, i);
-    bool set             = false;
-    unsigned lsb         = i * secret_key->bloom_filter->cellsize;
-    for (size_t j = 0; j < secret_key->bloom_filter->cellsize; ++j) {
-      if (T[(lsb + j) / 8] & 1 << (lsb + j) % 8) {
-        set = true;
-        break;
-      }
-    }
-
-    if (set && sk) {
+    bbg_secret_key_t* sk = vector_get(secret_key->sk_bloom, pos);
+    if (sk) {
       bbg_clear_secret_key(sk);
       free(sk);
-      vector_set(secret_key->sk_bloom, i, NULL);
+      vector_set(secret_key->sk_bloom, pos, NULL);
     }
   }
 
-  return result_status;
+  omp_unset_lock(&secret_key->bloom_filter_mutex);
+  return BFE_SUCCESS;
 }
 
 static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* params,
@@ -1848,7 +1841,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
   }
 
   // Reset the bloom filter.
-  bloom_reset(secret_key->bloom_filter);
+  bf_reset(&secret_key->bloom_filter);
 
   // Clear the existing bloom filter keys, and generate new ones for
   // the time interval tau.
@@ -2013,17 +2006,14 @@ bool tbfe_bbg_public_keys_are_equal(tbfe_bbg_public_key_t* l, tbfe_bbg_public_ke
 
 bool tbfe_bbg_secret_keys_are_equal(tbfe_bbg_secret_key_t* l, tbfe_bbg_secret_key_t* r) {
   if (vector_size(l->sk_bloom) != vector_size(r->sk_bloom) ||
-      l->bloom_filter->bitsize != r->bloom_filter->bitsize ||
-      l->bloom_filter->bytesize != r->bloom_filter->bytesize ||
-      l->bloom_filter->cells != r->bloom_filter->cells ||
-      l->bloom_filter->cellsize != r->bloom_filter->cellsize ||
-      l->bloom_filter->hashes != r->bloom_filter->hashes) {
+      l->bloom_filter.hash_count != r->bloom_filter.hash_count ||
+      l->bloom_filter.bitset.size != r->bloom_filter.bitset.size) {
     return false;
   }
 
-  const uint8_t* bitarray1 = l->bloom_filter->bitarray;
-  const uint8_t* bitarray2 = r->bloom_filter->bitarray;
-  if (memcmp(bitarray1, bitarray2, l->bloom_filter->bytesize)) {
+  const uint64_t* bitarray1 = l->bloom_filter.bitset.bits;
+  const uint64_t* bitarray2 = r->bloom_filter.bitset.bits;
+  if (memcmp(bitarray1, bitarray2, BITSET_SIZE(l->bloom_filter.bitset.size) * sizeof(uint64_t))) {
     return false;
   }
 

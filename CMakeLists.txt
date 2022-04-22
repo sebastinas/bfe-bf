@@ -57,7 +57,6 @@ list(APPEND BFE_SOURCES
      FIPS202-opt64/KeccakP-1600-opt64.c
      FIPS202-opt64/KeccakSpongeWidth1600.c
      bfe-bf.c
-     bloom.c
      core.c
      crypto_api.c
      tbfe-bbg.c

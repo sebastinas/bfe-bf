@@ -1,108 +1,122 @@
 #ifndef BLOOM_H
 #define BLOOM_H
 
+#include "FIPS202-opt64/KeccakHash.h"
 #include "include/types.h"
 
-#include <stdbool.h>
+#include <math.h>
 #include <stdint.h>
 
-struct bloom_filter {
-  uint8_t* bitarray;
-  unsigned int bitsize;
-  unsigned int bytesize;
-  unsigned int cells;
-  unsigned int cellsize;
-  unsigned int hashes;
-};
+/* bitset implementation */
+
+#define BITSET_WORD_BITS (8 * sizeof(uint64_t))
+#define BITSET_SIZE(size) (((size) + BITSET_WORD_BITS - 1) / BITSET_WORD_BITS)
 
 /**
- * Computes the hash_idx-th hash function for the given input and maps it to the size of the Bloom
- * filter
+ * Creates a bitset with the given number of bits.
+ *
+ * @param size the number of bits.
+ * @return The initialized bitset with all bits set to 0.
  */
-unsigned int bloom_get_position(unsigned int hash_idx, const void* input, unsigned int input_len,
-                                unsigned int filter_size);
+static inline bitset_t bitset_init(unsigned int size) {
+  return (bitset_t){.bits = calloc(BITSET_SIZE(size), sizeof(uint64_t)), .size = size};
+}
 
 /**
- * Initializes a bloom filter with a bit array adn MurmurHash hash function.
+ * Sets a specific bit of a bitset.
  *
- * @param[in] cells         - the number of cells in the array of the bloom filter
- * @param[in] cellsize      - the number of bits per cell
- * @param[in] hashes        - the number of hash functions for the bloom filter
- *
- * @return a pointer to an initialized bloom filter.
+ * @param bitset the bitset.
+ * @param index  the index of the bit supposed to be set to 1.
  */
-bloom_t bloom_init(unsigned int cells, unsigned int cellsize, unsigned int hashes);
+static inline void bitset_set(bitset_t* bitset, unsigned int index) {
+  bitset->bits[index / BITSET_WORD_BITS] |= (UINT64_C(1) << (index & (BITSET_WORD_BITS - 1)));
+}
 
 /**
- * Adds the provided element to the bloom filter, and if the element already exists
- * it re-adds it.
+ * Retrieves a specific bit of a bitset.
  *
- * @param[in] bf            - the pointer to an initialized bloom filter
- * @param[in] item          - the item to be added to the bloom filter
- * @param[in] len           - the length of the item
+ * @param bitset the bitset.
+ * @param index  the index of the bit in question.
+ * @return non-0 if the bit is set, 0 otherwise
  */
-bool bloom_add(bloom_t bf, const void* item, unsigned int len);
+static inline uint64_t bitset_get(const bitset_t* bitset, unsigned int index) {
+  return bitset->bits[index / BITSET_WORD_BITS] & (UINT64_C(1) << (index & (BITSET_WORD_BITS - 1)));
+}
 
 /**
- * Checks if the provided element is in the bloom filter (can produce false positives).
+ * Computes the number of set bits of a bitset.
  *
- * @param[in] bf            - the pointer to an initialized bloom filter
- * @param[in] item          - the item to be added to the bloom filter
- * @param[in] len           - the length of the item
- *
- * @return true if element is in the bloom filter, false otherwise.
+ * @param bitset the bitset.
+ * @return number of set bits
  */
-bool bloom_check(bloom_t bf, const void* item, unsigned int len);
+static inline unsigned int bitset_popcount(const bitset_t* bitset) {
+  unsigned int bits = 0;
+  for (unsigned int idx = 0; idx != BITSET_SIZE(bitset->size); ++idx) {
+    bits += __builtin_popcount(bitset->bits[idx]);
+  }
+  return bits;
+}
 
 /**
- * Removes the provided element from the bloom filter.
+ * Frees the memory allocated by the bitset.
  *
- * @param[in] bf            - the pointer to an initialized bloom filter
- * @param[in] item          - the item to be added to the bloom filter
- * @param[in] len           - the length of the item
- *
- * @return true if no cell counter underflowed, false otherwise.
+ * @param bitset the bitset.
  */
-bool bloom_remove(bloom_t bf, const void* item, unsigned int len);
+static inline void bitset_clean(bitset_t* bitset) {
+  if (bitset) {
+    free(bitset->bits);
+    bitset->bits = NULL;
+    bitset->size = 0;
+  }
+}
+
+/* bloom filter implementation */
+static inline unsigned int bf_get_needed_size(unsigned int n, double false_positive_prob) {
+  return -floor((n * log(false_positive_prob)) / (log(2) * log(2)));
+}
+
+static inline bloomfilter_t bf_init_fixed(unsigned int size, unsigned int hash_count) {
+  return (bloomfilter_t){.hash_count = hash_count, .bitset = bitset_init(size)};
+}
+
+static inline bloomfilter_t bf_init(unsigned int n, double false_positive_prob) {
+  const unsigned int bitset_size = bf_get_needed_size(n, false_positive_prob);
+
+  return (bloomfilter_t){.hash_count = ceil((bitset_size / (double)n) * log(2)),
+                         .bitset     = bitset_init(bitset_size)};
+}
+
+static inline unsigned int bf_get_position(uint32_t hash_idx, const uint8_t* input,
+                                           size_t input_len, unsigned int filter_size) {
+  static const uint8_t domain[] = "BF_HASH";
+
+  Keccak_HashInstance shake;
+  Keccak_HashInitialize_SHAKE128(&shake);
+
+  Keccak_HashUpdate(&shake, domain, sizeof(domain) * 8);
+  hash_idx = htole32(hash_idx);
+  Keccak_HashUpdate(&shake, (const uint8_t*)&hash_idx, sizeof(hash_idx) * 8);
+  Keccak_HashUpdate(&shake, input, input_len * 8);
+  Keccak_HashFinal(&shake, NULL);
+
+  uint64_t output = 0;
+  Keccak_HashSqueeze(&shake, (uint8_t*)&output, sizeof(output) * 8);
+  return le64toh(output) % filter_size;
+}
 
 /**
- * Resets the bit array of the provided bloom filter.
+ * Reset all bits of the bloom filter
  *
- * @param[in] bf            - the pointer to an initialized bloom filter
+ * @param reset the bloom filter
  */
-void bloom_reset(bloom_t bf);
+static inline void bf_reset(bloomfilter_t* filter) {
+  memset(filter->bitset.bits, 0, BITSET_SIZE(filter->bitset.size) * sizeof(uint64_t));
+}
 
-/**
- * Serializes the given bloom filter.
- *
- * @param[in] dst            - buffer large enough to store serialized bloom filter
- * @param[in] bf             - the bloom filter that is serialized
- */
-void bloom_serialize(uint8_t* dst, const bloom_t bf);
-
-/**
- * Allocates memory and deserializes the given bloom filter.
- *
- * @param[in] serialized    - the serialized bloom filter
- *
- * @return a pointer to the deserialized bloom filter.
- */
-bloom_t bloom_init_deserialize(const uint8_t* serialized);
-
-/**
- * Returns the serialized size of the given bloom filter.
- *
- * @param[in] bf            - the pointer to an initialized bloom filter
- *
- * @return the serialized size of the bloom filter.
- */
-unsigned bloom_get_size(bloom_t bf);
-
-/**
- * Frees the given bloom filter.
- *
- * @param[in] bf            - the pointer to an initialized bloom filter
- */
-void bloom_free(bloom_t bf);
+static inline void bf_clear(bloomfilter_t* filter) {
+  if (filter) {
+    bitset_clean(&filter->bitset);
+  }
+}
 
 #endif

@@ -5,11 +5,10 @@
 
 #include <cgreen/cgreen.h>
 
-static const unsigned number_hash_functions = 4;
-static const unsigned bloom_filter_size     = 1000;
-static const unsigned cellsize              = 4;
-static const unsigned t                     = 4;
-static const unsigned total_depth           = 4 + 2;
+static const unsigned bloom_filter_size = 50;
+static const unsigned t                 = 4;
+static const unsigned total_depth       = 4 + 2;
+static const double false_positive_prob = 0.001;
 
 Describe(TBFE);
 BeforeEach(TBFE) {}
@@ -23,12 +22,10 @@ Ensure(TBFE, same_key_returned_by_encapsulate_and_decapsulate) {
   uint8_t decapsulated_key[SECURITY_PARAMETER];
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
               is_equal_to(BFE_SUCCESS));
@@ -48,12 +45,10 @@ Ensure(TBFE, ciphertext_not_decapsulated_after_interval_puncture) {
   uint8_t decapsulated_punctured_key[SECURITY_PARAMETER];
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
   assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 2), is_equal_to(BFE_SUCCESS));
@@ -73,12 +68,10 @@ Ensure(TBFE, ciphertext_not_decapsulated_after_ciphertext_puncture) {
   uint8_t decapsulated_key[SECURITY_PARAMETER];
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
   assert_that(tbfe_bbg_puncture_ciphertext(&secret_key, &ciphertext), is_equal_to(BFE_SUCCESS));
@@ -100,13 +93,11 @@ Ensure(TBFE, multiple_ciphertext_punctures) {
   unsigned failures = 0;
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
 
-  for (size_t j = 0; j < bloom_filter_size / (TESTS * number_hash_functions); j++) {
+  for (size_t j = 0; j < bloom_filter_size / (TESTS * 10); j++) {
     tbfe_bbg_init_ciphertext(&ciphertext);
 
     assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
@@ -138,17 +129,13 @@ Ensure(TBFE, different_public_key_for_encapsulation_and_decapsulation) {
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
   tbfe_bbg_init_public_key(&public_key2, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
-  tbfe_bbg_init_secret_key(&secret_key2, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_secret_key(&secret_key2, bloom_filter_size, false_positive_prob);
 
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
-  assert_that(
-      tbfe_bbg_keygen(&public_key2, &secret_key2, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key2, &secret_key2, t), is_equal_to(BFE_SUCCESS));
 
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key2),
@@ -172,17 +159,13 @@ Ensure(TBFE, different_secret_key_for_encapsulation_and_decapsulation) {
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
   tbfe_bbg_init_public_key(&public_key2, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
-  tbfe_bbg_init_secret_key(&secret_key2, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_secret_key(&secret_key2, bloom_filter_size, false_positive_prob);
 
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
-  assert_that(
-      tbfe_bbg_keygen(&public_key2, &secret_key2, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key2, &secret_key2, t), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
   assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key2, &public_key),
@@ -202,11 +185,9 @@ Ensure(TBFE, public_key_serialization) {
   tbfe_bbg_public_key_t deserialized_public_key;
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
 
   uint8_t* serialized_public_key = malloc(tbfe_bbg_get_public_key_size(&public_key));
   tbfe_bbg_serialize_public_key(serialized_public_key, &public_key);
@@ -230,12 +211,10 @@ Ensure(TBFE, encapsulation_with_deserialized_public_key) {
   uint8_t decapsulated_key[SECURITY_PARAMETER];
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
 
   uint8_t* serialized_public_key = malloc(tbfe_bbg_get_public_key_size(&public_key));
   tbfe_bbg_serialize_public_key(serialized_public_key, &public_key);
@@ -267,12 +246,10 @@ Ensure(TBFE, secret_key_serialization) {
   tbfe_bbg_secret_key_t deserialized_punctured_secret_key;
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
   uint8_t* serialized_secret_key = malloc(tbfe_bbg_get_secret_key_size(&secret_key));
@@ -317,12 +294,10 @@ Ensure(TBFE, ciphertext_serialization) {
   uint8_t key[SECURITY_PARAMETER];
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
   uint8_t* serialized_ciphertext = malloc(tbfe_bbg_get_ciphertext_size(&ciphertext));
@@ -349,12 +324,10 @@ Ensure(TBFE, same_key_returned_by_encapsulate_and_decapsulate_with_serialization
   uint8_t decapsulated_key[SECURITY_PARAMETER];
 
   tbfe_bbg_init_public_key(&public_key, total_depth);
-  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, cellsize, number_hash_functions);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
   tbfe_bbg_init_ciphertext(&ciphertext);
 
-  assert_that(
-      tbfe_bbg_keygen(&public_key, &secret_key, bloom_filter_size, number_hash_functions, t),
-      is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key, t), is_equal_to(BFE_SUCCESS));
 
   uint8_t* serialized_public_key = malloc(tbfe_bbg_get_public_key_size(&public_key));
   tbfe_bbg_serialize_public_key(serialized_public_key, &public_key);

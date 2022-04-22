@@ -46,14 +46,13 @@ BFE_VISIBLE void tbfe_bbg_clear_public_key(tbfe_bbg_public_key_t* public_key);
  *
  * @param[out] secret_key - secret key to initialize
  * @param[in] bloom_filter_size - size of the bloom filter
- * @param[in] cellsize - TODO
- * @param[in] number_hash_functions - number of hash functions
+ * @param[in] false_positive_prob - false-positive probability of the bloom filter
  *
  * @return BFE_SUCCESS if nor error occurs, an error code otherwise.
  */
 BFE_VISIBLE int tbfe_bbg_init_secret_key(tbfe_bbg_secret_key_t* secret_key,
-                                         unsigned int bloom_filter_size, unsigned int cellsize,
-                                         unsigned int number_hash_functions);
+                                         unsigned int bloom_filter_size,
+                                         double false_positive_prob);
 
 /**
  * Deserialize secret key
@@ -102,16 +101,12 @@ BFE_VISIBLE void tbfe_bbg_clear_ciphertext(tbfe_bbg_ciphertext_t* ciphertext);
  *
  * @param[out] public_key               - the newly generated public key
  * @param[out] secret_key               - the newly generated secret key
- * @param[in] bloom_filter_size         - the size of the Bloom filter (m)
- * @param[in] number_hash_functions     - the number of distinct hash functions of the Bloom filter
- * (k)
  * @param[in] total_levels              - the total levels (t)
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
 BFE_VISIBLE int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key,
-                                tbfe_bbg_secret_key_t* secret_key, unsigned bloom_filter_size,
-                                unsigned number_hash_functions, unsigned total_levels);
+                                tbfe_bbg_secret_key_t* secret_key, unsigned total_levels);
 
 /**
  * Generates a new session key and outputs it together with an encapsulation of the key under the
