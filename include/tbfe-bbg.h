@@ -166,7 +166,7 @@ BFE_VISIBLE int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key,
  * @param[out] serialized       - the serialized public key
  * @param[in] public_key        - the public key that is serialized
  */
-BFE_VISIBLE void tbfe_bbg_serialize_public_key(uint8_t* serialized,
+BFE_VISIBLE void tbfe_bbg_public_key_serialize(uint8_t* serialized,
                                                tbfe_bbg_public_key_t* public_key);
 
 /**
@@ -175,7 +175,7 @@ BFE_VISIBLE void tbfe_bbg_serialize_public_key(uint8_t* serialized,
  * @param[out] serialized       - the serialized secret key
  * @param[in] secret_key        - the secret key that is serialized
  */
-BFE_VISIBLE void tbfe_bbg_serialize_secret_key(uint8_t* serialized,
+BFE_VISIBLE void tbfe_bbg_secret_key_serialize(uint8_t* serialized,
                                                tbfe_bbg_secret_key_t* secret_key);
 
 /**
@@ -184,7 +184,7 @@ BFE_VISIBLE void tbfe_bbg_serialize_secret_key(uint8_t* serialized,
  * @param[out] serialized       - the serialized ciphertext
  * @param[in] ciphertext        - the ciphertext that is serialized
  */
-BFE_VISIBLE void tbfe_bbg_serialize_ciphertext(uint8_t* serialized,
+BFE_VISIBLE void tbfe_bbg_ciphertext_serialize(uint8_t* serialized,
                                                tbfe_bbg_ciphertext_t* ciphertext);
 
 /**
@@ -194,7 +194,7 @@ BFE_VISIBLE void tbfe_bbg_serialize_ciphertext(uint8_t* serialized,
  *
  * @return the size of the public key.
  */
-BFE_VISIBLE unsigned tbfe_bbg_get_public_key_size(const tbfe_bbg_public_key_t* public_key);
+BFE_VISIBLE unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key);
 
 /**
  * Returns the size of the given secret key.
@@ -203,7 +203,7 @@ BFE_VISIBLE unsigned tbfe_bbg_get_public_key_size(const tbfe_bbg_public_key_t* p
  *
  * @return the size of the secret key.
  */
-BFE_VISIBLE unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* secret_key);
+BFE_VISIBLE unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key);
 
 /**
  * Returns the size of the given ciphertext.
@@ -212,7 +212,7 @@ BFE_VISIBLE unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* s
  *
  * @return the size of the ciphertext.
  */
-BFE_VISIBLE unsigned tbfe_bbg_get_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext);
+BFE_VISIBLE unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext);
 
 BFE_END_CDECL
 

@@ -1320,7 +1320,7 @@ clear_buffer:
   return ret;
 }
 
-void tbfe_bbg_serialize_public_key(uint8_t* serialized, tbfe_bbg_public_key_t* public_key) {
+void tbfe_bbg_public_key_serialize(uint8_t* serialized, tbfe_bbg_public_key_t* public_key) {
   write_u32(&serialized, public_key->bloom_filter_hashes);
   write_u32(&serialized, public_key->bloom_filter_size);
 
@@ -1329,7 +1329,7 @@ void tbfe_bbg_serialize_public_key(uint8_t* serialized, tbfe_bbg_public_key_t* p
   bbg_serialize_public_params(serialized, &public_key->params);
 }
 
-void tbfe_bbg_serialize_secret_key(uint8_t* serialized, tbfe_bbg_secret_key_t* secret_key) {
+void tbfe_bbg_secret_key_serialize(uint8_t* serialized, tbfe_bbg_secret_key_t* secret_key) {
   unsigned sk_bloom_count = vector_size(secret_key->sk_bloom);
   unsigned sk_time_count  = vector_size(secret_key->sk_time);
 
@@ -1360,7 +1360,7 @@ void tbfe_bbg_serialize_secret_key(uint8_t* serialized, tbfe_bbg_secret_key_t* s
   }
 }
 
-void tbfe_bbg_serialize_ciphertext(uint8_t* serialized, tbfe_bbg_ciphertext_t* ciphertext) {
+void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* ciphertext) {
   const unsigned ciphertext_count = vector_size(ciphertext->Cs);
 
   write_u32(&serialized, ciphertext_count);
@@ -1381,12 +1381,12 @@ void tbfe_bbg_serialize_ciphertext(uint8_t* serialized, tbfe_bbg_ciphertext_t* c
   write_g1(&serialized, ciphertext->ots_pk.cs);
 }
 
-unsigned tbfe_bbg_get_public_key_size(const tbfe_bbg_public_key_t* public_key) {
+unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key) {
   return BBG_PUBLIC_KEY_SIZE + bbg_get_public_params_size(&public_key->params) +
          2 * sizeof(uint32_t);
 }
 
-unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
+unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
   unsigned int sk_bloom_count = vector_size(secret_key->sk_bloom);
   unsigned int sk_time_count  = vector_size(secret_key->sk_time);
 
@@ -1405,7 +1405,7 @@ unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
   return total_size;
 }
 
-unsigned tbfe_bbg_get_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
+unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
   const unsigned ciphertext_count = vector_size(ciphertext->Cs);
   return 2 * sizeof(uint32_t) + (ciphertext_count * BBG_CIPHERTEXT_SIZE) + SECURITY_PARAMETER +
          OTS_SIZE + OTS_PUBLIC_KEY_SIZE;

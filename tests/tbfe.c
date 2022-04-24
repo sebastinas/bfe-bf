@@ -188,8 +188,8 @@ Ensure(TBFE, public_key_serialization) {
 
   assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
 
-  uint8_t* serialized_public_key = malloc(tbfe_bbg_get_public_key_size(&public_key));
-  tbfe_bbg_serialize_public_key(serialized_public_key, &public_key);
+  uint8_t* serialized_public_key = malloc(tbfe_bbg_public_key_size(&public_key));
+  tbfe_bbg_public_key_serialize(serialized_public_key, &public_key);
   assert_that(
       tbfe_bbg_init_public_key_from_serialized(&deserialized_public_key, serialized_public_key),
       is_equal_to(BFE_SUCCESS));
@@ -215,8 +215,8 @@ Ensure(TBFE, encapsulation_with_deserialized_public_key) {
 
   assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
 
-  uint8_t* serialized_public_key = malloc(tbfe_bbg_get_public_key_size(&public_key));
-  tbfe_bbg_serialize_public_key(serialized_public_key, &public_key);
+  uint8_t* serialized_public_key = malloc(tbfe_bbg_public_key_size(&public_key));
+  tbfe_bbg_public_key_serialize(serialized_public_key, &public_key);
   assert_that(
       tbfe_bbg_init_public_key_from_serialized(&deserialized_public_key, serialized_public_key),
       is_equal_to(BFE_SUCCESS));
@@ -251,8 +251,8 @@ Ensure(TBFE, secret_key_serialization) {
   assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
-  uint8_t* serialized_secret_key = malloc(tbfe_bbg_get_secret_key_size(&secret_key));
-  tbfe_bbg_serialize_secret_key(serialized_secret_key, &secret_key);
+  uint8_t* serialized_secret_key = malloc(tbfe_bbg_secret_key_size(&secret_key));
+  tbfe_bbg_secret_key_serialize(serialized_secret_key, &secret_key);
 
   assert_that(
       tbfe_bbg_init_secret_key_from_serialized(&deserialized_secret_key, serialized_secret_key),
@@ -264,8 +264,8 @@ Ensure(TBFE, secret_key_serialization) {
   assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
 
   assert_that(tbfe_bbg_puncture_ciphertext(&secret_key, &ciphertext), is_equal_to(BFE_SUCCESS));
-  uint8_t* serialized_punctured_secret_key = malloc(tbfe_bbg_get_secret_key_size(&secret_key));
-  tbfe_bbg_serialize_secret_key(serialized_punctured_secret_key, &secret_key);
+  uint8_t* serialized_punctured_secret_key = malloc(tbfe_bbg_secret_key_size(&secret_key));
+  tbfe_bbg_secret_key_serialize(serialized_punctured_secret_key, &secret_key);
 
   assert_that(tbfe_bbg_init_secret_key_from_serialized(&deserialized_punctured_secret_key,
                                                        serialized_punctured_secret_key),
@@ -299,8 +299,8 @@ Ensure(TBFE, ciphertext_serialization) {
   assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
 
-  uint8_t* serialized_ciphertext = malloc(tbfe_bbg_get_ciphertext_size(&ciphertext));
-  tbfe_bbg_serialize_ciphertext(serialized_ciphertext, &ciphertext);
+  uint8_t* serialized_ciphertext = malloc(tbfe_bbg_ciphertext_size(&ciphertext));
+  tbfe_bbg_ciphertext_serialize(serialized_ciphertext, &ciphertext);
   assert_that(
       tbfe_bbg_init_ciphertext_from_serialized(&deserialized_ciphertext, serialized_ciphertext),
       is_equal_to(BFE_SUCCESS));
@@ -328,15 +328,15 @@ Ensure(TBFE, same_key_returned_by_encapsulate_and_decapsulate_with_serialization
 
   assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
 
-  uint8_t* serialized_public_key = malloc(tbfe_bbg_get_public_key_size(&public_key));
-  tbfe_bbg_serialize_public_key(serialized_public_key, &public_key);
+  uint8_t* serialized_public_key = malloc(tbfe_bbg_public_key_size(&public_key));
+  tbfe_bbg_public_key_serialize(serialized_public_key, &public_key);
   assert_that(
       tbfe_bbg_init_public_key_from_serialized(&deserialized_public_key, serialized_public_key),
       is_equal_to(BFE_SUCCESS));
 
   assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
-  uint8_t* serialized_ciphertext = malloc(tbfe_bbg_get_ciphertext_size(&ciphertext));
-  tbfe_bbg_serialize_ciphertext(serialized_ciphertext, &ciphertext);
+  uint8_t* serialized_ciphertext = malloc(tbfe_bbg_ciphertext_size(&ciphertext));
+  tbfe_bbg_ciphertext_serialize(serialized_ciphertext, &ciphertext);
   assert_that(
       tbfe_bbg_init_ciphertext_from_serialized(&deserialized_ciphertext, serialized_ciphertext),
       is_equal_to(BFE_SUCCESS));

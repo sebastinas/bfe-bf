@@ -164,8 +164,8 @@ namespace {
 
       start_time = high_resolution_clock::now();
       tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
-      serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(ciphertext.get()));
-      tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), ciphertext.get());
+      serialized_ciphertext.resize(tbfe_bbg_ciphertext_size(ciphertext.get()));
+      tbfe_bbg_ciphertext_serialize(serialized_ciphertext.data(), ciphertext.get());
       encaps_serialize_time +=
           duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
@@ -188,8 +188,8 @@ namespace {
       {
         auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
         tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
-        serialized_ciphertext.resize(tbfe_bbg_get_ciphertext_size(ciphertext.get()));
-        tbfe_bbg_serialize_ciphertext(serialized_ciphertext.data(), ciphertext.get());
+        serialized_ciphertext.resize(tbfe_bbg_ciphertext_size(ciphertext.get()));
+        tbfe_bbg_ciphertext_serialize(serialized_ciphertext.data(), ciphertext.get());
       }
 
       start_time      = high_resolution_clock::now();

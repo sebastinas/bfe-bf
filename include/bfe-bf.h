@@ -194,12 +194,12 @@
  *  }
  *
  *  // serialize public key
- *  uint8_t* serialized_pk = malloc(tbfe_bbg_get_public_key_size(&pk));
- *  tbfe_bbg_serialize_public_key(serialized_pk, &pk);
+ *  uint8_t* serialized_pk = malloc(tbfe_bbg_public_key_size(&pk));
+ *  tbfe_bbg_public_key_serialize(serialized_pk, &pk);
  *
  *  // serialize secret key
- *  uint8_t* serialized_sk = malloc(tbfe_bbg_get_secret_key_size(&sk));
- *  tbfe_bbg_serialize_secret_key(serialized_sk, &sk);
+ *  uint8_t* serialized_sk = malloc(tbfe_bbg_secret_key_size(&sk));
+ *  tbfe_bbg_secret_key_serialize(serialized_sk, &sk);
  *
  *  // clean up keys
  *  tbfe_bbg_clear_secret_key(&sk);
@@ -230,8 +230,8 @@
  *  }
  *
  *  // serialize the ciphertext
- *  uint8_t* serialized_ct = malloc(tbfe_bbg_get_ciphertext_size(&ciphertext));
- *  tbfe_bbg_serialize_ciphertext(serialized_ct, &ciphertext);
+ *  uint8_t* serialized_ct = malloc(tbfe_bbg_ciphertext_size(&ciphertext));
+ *  tbfe_bbg_ciphertext_serialize(serialized_ct, &ciphertext);
  *
  *  // clean up
  *  tbfe_bbg_clear_ciphertext(&ciphertext);
@@ -273,7 +273,7 @@
  *
  *  // puncture secret key and serialized it again
  *  tbfe_bbg_puncture_ciphertext(&sk, &ciphertext);
- *  tbfe_bbg_serialize_secret_key(seralized_sk, &sk);
+ *  tbfe_bbg_secret_key_serialize(seralized_sk, &sk);
  *
  *  // clean up
  *  tbfe_bbg_clear_ciphertext(&ciphertext);
@@ -303,8 +303,8 @@
  *
  *  // puncture secret key and serialized it again
  *  tbfe_bbg_puncture_interval(&sk, &pk, 13);
- *  tbfe_bbg_serialize_secret_key(seralized_sk, &sk);
- *  tbfe_bbg_serialize_public_key(seralized_pk, &pk);
+ *  tbfe_bbg_secret_key_serialize(seralized_sk, &sk);
+ *  tbfe_bbg_public_key_serialize(seralized_pk, &pk);
  *
  *  // clean up
  *  tbfe_bbg_clear_public_key(&pk);
