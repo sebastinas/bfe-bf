@@ -32,8 +32,8 @@ BFE_VISIBLE int tbfe_bbg_init_public_key(tbfe_bbg_public_key_t* public_key,
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
-BFE_VISIBLE int tbfe_bbg_init_public_key_from_serialized(tbfe_bbg_public_key_t* public_key,
-                                                         const uint8_t* src);
+BFE_VISIBLE int tbfe_bbg_public_key_deserialize(tbfe_bbg_public_key_t* public_key,
+                                                const uint8_t* src);
 /**
  * Clear a public key.
  *
@@ -62,8 +62,8 @@ BFE_VISIBLE int tbfe_bbg_init_secret_key(tbfe_bbg_secret_key_t* secret_key,
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
-BFE_VISIBLE int tbfe_bbg_init_secret_key_from_serialized(tbfe_bbg_secret_key_t* secret_key,
-                                                         const uint8_t* src);
+BFE_VISIBLE int tbfe_bbg_secret_key_deserialize(tbfe_bbg_secret_key_t* secret_key,
+                                                const uint8_t* src);
 /*
  * Clear a secret key.
  *
@@ -87,8 +87,8 @@ BFE_VISIBLE int tbfe_bbg_init_ciphertext(tbfe_bbg_ciphertext_t* ciphertext);
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
-BFE_VISIBLE int tbfe_bbg_init_ciphertext_from_serialized(tbfe_bbg_ciphertext_t* ciphertext,
-                                                         const uint8_t* src);
+BFE_VISIBLE int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext,
+                                                const uint8_t* src);
 /**
  * Clear a ciphertext
  *

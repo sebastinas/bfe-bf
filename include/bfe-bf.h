@@ -217,7 +217,7 @@
  *  tbfe_bbg_public_key_t pk;
  *
  *  // deserialize the public key
- *  if (tbfe_bbg_init_public_key_from_serialized(&pk, serialized_pk)) {
+ *  if (tbfe_bbg_public_key_deserialize(&pk, serialized_pk)) {
  *    // handle error
  *  }
  *
@@ -248,13 +248,13 @@
  *
  *  // deserialize the secret key
  *  bfe_bf_secret_key_t sk;
- *  if (tbfe_bbg_init_secret_key_from_serialized(&sk, serialized_sk)) {
+ *  if (tbfe_bbg_secret_key_deserialize(&sk, serialized_sk)) {
  *    // handle error
  *  }
  *
  *  // deserialize the public key
  *  tbfe_bbg_public_key_t pk;
- *  if (tbfe_bbg_init_public_key_from_serialized(&pk, serialized_pk)) {
+ *  if (tbfe_bbg_public_key_deserialize(&pk, serialized_pk)) {
  *    // handle error
  *  }
  *
@@ -291,13 +291,13 @@
  *
  *  // deserialize the secret key
  *  bfe_bf_secret_key_t sk;
- *  if (tbfe_bbg_init_secret_key_from_serialized(&sk, serialized_sk)) {
+ *  if (tbfe_bbg_secret_key_deserialize(&sk, serialized_sk)) {
  *    // handle error
  *  }
  *
  *  // deserialize the public key
  *  tbfe_bbg_public_key_t pk;
- *  if (tbfe_bbg_init_public_key_from_serialized(&pk, serialized_pk)) {
+ *  if (tbfe_bbg_public_key_deserialize(&pk, serialized_pk)) {
  *    // handle error
  *  }
  *

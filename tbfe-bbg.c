@@ -1114,8 +1114,7 @@ int tbfe_bbg_init_public_key(tbfe_bbg_public_key_t* public_key, unsigned int tot
   return BFE_SUCCESS;
 }
 
-int tbfe_bbg_init_public_key_from_serialized(tbfe_bbg_public_key_t* public_key,
-                                             const uint8_t* src) {
+int tbfe_bbg_public_key_deserialize(tbfe_bbg_public_key_t* public_key, const uint8_t* src) {
   if (!public_key || !src) {
     return BFE_ERROR_INVALID_PARAM;
   }
@@ -1157,8 +1156,7 @@ int tbfe_bbg_init_secret_key(tbfe_bbg_secret_key_t* secret_key, unsigned int blo
   return err;
 }
 
-int tbfe_bbg_init_secret_key_from_serialized(tbfe_bbg_secret_key_t* secret_key,
-                                             const uint8_t* src) {
+int tbfe_bbg_secret_key_deserialize(tbfe_bbg_secret_key_t* secret_key, const uint8_t* src) {
   if (!secret_key || !src) {
     return BFE_ERROR_INVALID_PARAM;
   }
@@ -1226,8 +1224,7 @@ int tbfe_bbg_init_ciphertext(tbfe_bbg_ciphertext_t* ciphertext) {
   return ret;
 }
 
-int tbfe_bbg_init_ciphertext_from_serialized(tbfe_bbg_ciphertext_t* ciphertext,
-                                             const uint8_t* src) {
+int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext, const uint8_t* src) {
   if (!ciphertext || !src) {
     return BFE_ERROR_INVALID_PARAM;
   }

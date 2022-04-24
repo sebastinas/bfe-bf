@@ -193,7 +193,7 @@ namespace {
       }
 
       start_time      = high_resolution_clock::now();
-      auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext_from_serialized,
+      auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_ciphertext_deserialize,
                                                            serialized_ciphertext.data());
 
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
