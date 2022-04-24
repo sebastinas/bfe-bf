@@ -46,7 +46,7 @@ typedef struct {
  *
  * @internal
  */
-typedef struct _bloomfilter_t {
+typedef struct {
   unsigned int hash_count;
   bitset_t bitset;
 } bloomfilter_t;
@@ -82,6 +82,8 @@ typedef struct {
 
 /**
  * Public key of a OTS
+ *
+ * @internal
  */
 typedef struct {
   g1_t fs;
@@ -91,6 +93,8 @@ typedef struct {
 
 /**
  * Signature of a OTS
+ *
+ * @internal
  */
 typedef struct {
   bn_t r;
