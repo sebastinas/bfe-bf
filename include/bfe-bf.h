@@ -12,14 +12,17 @@
 /**
  * @mainpage
  *
- * The BFE library implements an IND-CCA secure puncturable key encapsulation mechanism from
- * bloom filter encryption basedon the Boneh-Franklin IBE.
+ * The BFE library implements an IND-CCA secure puncturable key encapsulation
+ * mechanism from bloom filter encryption (BFE) based on the Boneh-Franklin IBE.
+ * Additionally, it also implements time-based bloom filter encryption (TB-BFE)
+ * based on the Boneh-Boyen-Goh HIBE.
  *
- * In the following, we present the typical usage of the library including key generation,
- * encapsualtion, decapusalation, and puncturing. The examples also examplify the serialization and
- * deserialization of the structures to the byte arrays.
+ * In the following, we present the typical usage of the library including key
+ * generation, encapsualtion, decapusalation, and puncturing. The examples also
+ * examplify the serialization and deserialization of the structures to the byte
+ * arrays.
  *
- * Let's start with key generation:
+ * Let's start with key generation of BFE:
  * @code{.c}
  *  bfe_bf_secret_key_t sk;
  *  bfe_bf_public_key_t pk;
@@ -174,6 +177,138 @@
  *  if (crypto_kem_punc(sk, ct)) {
  *    // handle error
  *  }
+ * @endcode
+ *
+ * Finally, we take a look at usage of the TB-BFE API. We start with key generation:
+ * @code{.c}
+ *  // the secret key
+ *  tbfe_bbg_secret_key_t sk;
+ *  // the public key
+ *  tbfe_bbg_public_key_t pk;
+ *
+ *  // generate new keys
+ *  tbfe_bbg_init_public_key(&public_key, 10);
+ *  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+ *  if (tbfe_bbg_keygen(&pk, &sk, 32, 1 << 10, 0.0009765625)) {
+ *    // handle error
+ *  }
+ *
+ *  // serialize public key
+ *  uint8_t* serialized_pk = malloc(tbfe_bbg_get_public_key_size(&pk));
+ *  tbfe_bbg_serialize_public_key(serialized_pk, &pk);
+ *
+ *  // serialize secret key
+ *  uint8_t* serialized_sk = malloc(tbfe_bbg_get_secret_key_size(&sk));
+ *  tbfe_bbg_serialize_secret_key(serialized_sk, &sk);
+ *
+ *  // clean up keys
+ *  tbfe_bbg_clear_secret_key(&sk);
+ *  tbfe_bbg_clear_public_key(&pk);
+ * @endcode
+ * The paramters passed to @ref tbfe_bbg_init_public_key setups the key to
+ * handle <code>2^10</code> epochs. The call to @ref tbfe_bbg_init_secret_key
+ * initializes the secret key with a bloom filter size of <code>2^10</code>
+ * elements and a correctness error of approximately <code>2^-10</code>.
+ *
+ * The following code examplifies encapsulation in epoch 12:
+ * @code{.c}
+ *  // the serialized public key
+ *  const uint8_t* serialized_pk;
+ *  tbfe_bbg_public_key_t pk;
+ *
+ *  // deserialize the public key
+ *  if (tbfe_bbg_init_public_key_from_serialized(&pk, serialized_pk)) {
+ *    // handle error
+ *  }
+ *
+ *  // encaps a new key
+ *  tbfe_bbg_ciphertext_t ciphertext;
+ *  tbfe_bbg_init_ciphertext(&ciphertext);
+ *  uint8_t key[SECURITY_PARAMETER];
+ *  if ((tbfe_bbg_encaps(key, &ciphertext, &public_key, 12)) {
+ *    // handle error
+ *  }
+ *
+ *  // serialize the ciphertext
+ *  uint8_t* serialized_ct = malloc(tbfe_bbg_get_ciphertext_size(&ciphertext));
+ *  tbfe_bbg_serialize_ciphertext(serialized_ct, &ciphertext);
+ *
+ *  // clean up
+ *  tbfe_bbg_clear_ciphertext(&ciphertext);
+ *  tbfe_bbg_clear_public_key(&pk);
+ * @endcode
+ * and decapsulation with puncturing:
+ * @code{.c}
+ *  // the serialized secret key
+ *  uint8_t* serialized_sk;
+ *  // the serialized public key
+ *  const uint8_t* serialized_pk;
+ *  // the serialized ciphertext
+ *  const uint8_t* serialized_ct;
+ *
+ *  // deserialize the secret key
+ *  bfe_bf_secret_key_t sk;
+ *  if (tbfe_bbg_init_secret_key_from_serialized(&sk, serialized_sk)) {
+ *    // handle error
+ *  }
+ *
+ *  // deserialize the public key
+ *  tbfe_bbg_public_key_t pk;
+ *  if (tbfe_bbg_init_public_key_from_serialized(&pk, serialized_pk)) {
+ *    // handle error
+ *  }
+ *
+ *  // deserialize the ciphertext
+ *  bfe_bf_ciphertext_t ciphertext;
+ *  if (tbfe_bbg_initciphertext_from_serialized(&ciphertext, serialized_ct)) {
+ *    // handle error
+ *  }
+ *
+ *  // decaps ciphertext
+ *  uint8_t key[SECURITY_PARAMETER];
+ *  if (tbfe_bbg_decaps(key, &ciphertext, &sk, &pk)) {}
+ *  if (bfe_bf_decaps(key, &pk, &sk, &ciphertext)) {
+ *    // handle error
+ *  }
+ *
+ *  // puncture secret key and serialized it again
+ *  tbfe_bbg_puncture_ciphertext(&sk, &ciphertext);
+ *  tbfe_bbg_serialize_secret_key(seralized_sk, &sk);
+ *
+ *  // clean up
+ *  tbfe_bbg_clear_ciphertext(&ciphertext);
+ *  tbfe_bbg_clear_public_key(&pk);
+ *  tbfe_bbg_clear_secret_key(&sk);
+ * @endcode
+ *
+ * Besides puncturing the secret key on a ciphertext, the secret key can also be evolved to the next
+ * epoch. The following example, moves from epoch 12 to epoch 13.
+ * @code{.c}
+ *  // the serialized secret key
+ *  uint8_t* serialized_sk;
+ *  // the serialized public key
+ *  uint8_t* serialized_pk;
+ *
+ *  // deserialize the secret key
+ *  bfe_bf_secret_key_t sk;
+ *  if (tbfe_bbg_init_secret_key_from_serialized(&sk, serialized_sk)) {
+ *    // handle error
+ *  }
+ *
+ *  // deserialize the public key
+ *  tbfe_bbg_public_key_t pk;
+ *  if (tbfe_bbg_init_public_key_from_serialized(&pk, serialized_pk)) {
+ *    // handle error
+ *  }
+ *
+ *  // puncture secret key and serialized it again
+ *  tbfe_bbg_puncture_interval(&sk, &pk, 13);
+ *  tbfe_bbg_serialize_secret_key(seralized_sk, &sk);
+ *  tbfe_bbg_serialize_public_key(seralized_pk, &pk);
+ *
+ *  // clean up
+ *  tbfe_bbg_clear_public_key(&pk);
+ *  tbfe_bbg_clear_secret_key(&sk);
  * @endcode
  */
 
