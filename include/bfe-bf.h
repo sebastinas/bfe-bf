@@ -187,9 +187,9 @@
  *  tbfe_bbg_public_key_t pk;
  *
  *  // generate new keys
- *  tbfe_bbg_init_public_key(&public_key, 10);
- *  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
- *  if (tbfe_bbg_keygen(&pk, &sk, 32, 1 << 10, 0.0009765625)) {
+ *  tbfe_bbg_init_public_key(&public_key, 11);
+ *  tbfe_bbg_init_secret_key(&secret_key, 1 << 10, 0.0009765625);
+ *  if (tbfe_bbg_keygen(&pk, &sk)) {
  *    // handle error
  *  }
  *
@@ -206,7 +206,7 @@
  *  tbfe_bbg_clear_public_key(&pk);
  * @endcode
  * The paramters passed to @ref tbfe_bbg_init_public_key setups the key to
- * handle <code>2^10</code> epochs. The call to @ref tbfe_bbg_init_secret_key
+ * handle <code>2^9</code> epochs. The call to @ref tbfe_bbg_init_secret_key
  * initializes the secret key with a bloom filter size of <code>2^10</code>
  * elements and a correctness error of approximately <code>2^-10</code>.
  *
