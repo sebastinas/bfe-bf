@@ -133,8 +133,8 @@ namespace {
 
   void bench_tbfe() {
     /* TODO: use sensible parameters */
-    constexpr unsigned int bloom_filter_size = 1 << 10;
-    constexpr unsigned int total_depth       = 4 + 2;
+    constexpr unsigned int bloom_filter_size = 1 << 9;
+    constexpr unsigned int total_depth       = 10 + 2;
 
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
                                                  0.0009765625);
