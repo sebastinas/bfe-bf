@@ -1170,14 +1170,7 @@ int tbfe_bbg_init_secret_key_from_serialized(tbfe_bbg_secret_key_t* secret_key,
   const unsigned int sk_bloom_count = read_u32(&src);
   const unsigned int sk_time_count  = read_u32(&src);
   secret_key->next_interval         = read_u32(&src);
-
-  const unsigned int hash_count  = read_u32(&src);
-  const unsigned int filter_size = read_u32(&src);
-
-  secret_key->bloom_filter = bf_init_fixed(filter_size, hash_count);
-  for (unsigned int i = 0; i < BITSET_SIZE(secret_key->bloom_filter.bitset.size); ++i) {
-    secret_key->bloom_filter.bitset.bits[i] = read_u64(&src);
-  }
+  secret_key->bloom_filter          = bf_read(&src);
 
   secret_key->sk_bloom = vector_new(sk_bloom_count);
   secret_key->sk_time  = vector_new(sk_time_count);
@@ -1343,12 +1336,7 @@ void tbfe_bbg_serialize_secret_key(uint8_t* serialized, tbfe_bbg_secret_key_t* s
   write_u32(&serialized, sk_bloom_count);
   write_u32(&serialized, sk_time_count);
   write_u32(&serialized, secret_key->next_interval);
-
-  write_u32(&serialized, secret_key->bloom_filter.hash_count);
-  write_u32(&serialized, secret_key->bloom_filter.bitset.size);
-  for (unsigned int i = 0; i < BITSET_SIZE(secret_key->bloom_filter.bitset.size); ++i) {
-    write_u64(&serialized, secret_key->bloom_filter.bitset.bits[i]);
-  }
+  bf_write(&serialized, &secret_key->bloom_filter);
 
   for (size_t i = 0; i < sk_bloom_count; ++i) {
     bbg_secret_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
@@ -1402,8 +1390,7 @@ unsigned tbfe_bbg_get_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
   unsigned int sk_bloom_count = vector_size(secret_key->sk_bloom);
   unsigned int sk_time_count  = vector_size(secret_key->sk_time);
 
-  unsigned int total_size =
-      5 * sizeof(uint32_t) + BITSET_SIZE(secret_key->bloom_filter.bitset.size) * sizeof(uint64_t);
+  unsigned int total_size = 3 * sizeof(uint32_t) + bf_serialized_size(&secret_key->bloom_filter);
   for (size_t i = 0; i < sk_bloom_count; ++i) {
     bbg_secret_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
     if (sk_bloom_i != NULL) {

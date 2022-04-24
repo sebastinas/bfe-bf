@@ -3,6 +3,7 @@
 
 #include "FIPS202-opt64/KeccakHash.h"
 #include "include/types.h"
+#include "utils.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -117,6 +118,29 @@ static inline void bf_clear(bloomfilter_t* filter) {
   if (filter) {
     bitset_clean(&filter->bitset);
   }
+}
+
+static inline unsigned int bf_serialized_size(const bloomfilter_t* filter) {
+  return 2 * sizeof(uint32_t) + BITSET_SIZE(filter->bitset.size) * sizeof(uint64_t);
+}
+
+static void bf_write(uint8_t** dst, const bloomfilter_t* filter) {
+  write_u32(dst, filter->hash_count);
+  write_u32(dst, filter->bitset.size);
+  for (unsigned int i = 0; i < BITSET_SIZE(filter->bitset.size); ++i) {
+    write_u64(dst, filter->bitset.bits[i]);
+  }
+}
+
+static inline bloomfilter_t bf_read(const uint8_t** src) {
+  const unsigned int hash_count  = read_u32(src);
+  const unsigned int filter_size = read_u32(src);
+
+  bloomfilter_t bloom_filter = bf_init_fixed(filter_size, hash_count);
+  for (unsigned int i = 0; i < BITSET_SIZE(bloom_filter.bitset.size); ++i) {
+    bloom_filter.bitset.bits[i] = read_u64(src);
+  }
+  return bloom_filter;
 }
 
 #endif

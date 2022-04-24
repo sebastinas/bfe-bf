@@ -514,17 +514,11 @@ unsigned int bfe_bf_secret_key_size(const bfe_bf_secret_key_t* secret_key) {
   unsigned int num_keys =
       secret_key->filter.bitset.size - bitset_popcount(&secret_key->filter.bitset);
 
-  return 2 * sizeof(uint32_t) + BITSET_SIZE(secret_key->filter.bitset.size) * sizeof(uint64_t) +
-         num_keys * EP2_SIZE;
+  return bf_serialized_size(&secret_key->filter) + num_keys * EP2_SIZE;
 }
 
 void bfe_bf_secret_key_serialize(uint8_t* dst, const bfe_bf_secret_key_t* secret_key) {
-  write_u32(&dst, secret_key->filter.hash_count);
-  write_u32(&dst, secret_key->filter.bitset.size);
-  for (unsigned int i = 0; i < BITSET_SIZE(secret_key->filter.bitset.size); ++i) {
-    write_u64(&dst, secret_key->filter.bitset.bits[i]);
-  }
-
+  bf_write(&dst, &secret_key->filter);
   for (unsigned int i = 0; i < secret_key->filter.bitset.size; ++i) {
     if (bitset_get(&secret_key->filter.bitset, i) == 0) {
       ep2_write_bin(dst, EP2_SIZE, secret_key->secret_keys[i], 0);
@@ -534,19 +528,13 @@ void bfe_bf_secret_key_serialize(uint8_t* dst, const bfe_bf_secret_key_t* secret
 }
 
 int bfe_bf_secret_key_deserialize(bfe_bf_secret_key_t* secret_key, const uint8_t* src) {
-  const unsigned int hash_count  = read_u32(&src);
-  const unsigned int filter_size = read_u32(&src);
-
-  secret_key->filter = bf_init_fixed(filter_size, hash_count);
-  for (unsigned int i = 0; i < BITSET_SIZE(secret_key->filter.bitset.size); ++i) {
-    secret_key->filter.bitset.bits[i] = read_u64(&src);
-  }
-  secret_key->secret_keys_len = filter_size;
-  secret_key->secret_keys     = calloc(filter_size, sizeof(ep2_t));
+  secret_key->filter          = bf_read(&src);
+  secret_key->secret_keys_len = secret_key->filter.bitset.size;
+  secret_key->secret_keys     = calloc(secret_key->filter.bitset.size, sizeof(ep2_t));
 
   int status = BFE_SUCCESS;
   TRY {
-    for (unsigned int i = 0; i < filter_size; ++i) {
+    for (unsigned int i = 0; i < secret_key->filter.bitset.size; ++i) {
       if (bitset_get(&secret_key->filter.bitset, i) == 0) {
         ep2_new(secret_key->secret_keys[i]);
         ep2_read_bin(secret_key->secret_keys[i], src, EP2_SIZE);
