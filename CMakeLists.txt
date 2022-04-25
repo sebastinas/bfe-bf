@@ -114,7 +114,7 @@ endif()
 
 # benchmarks
 add_executable(bench bench.cpp)
-target_link_libraries(bench PRIVATE bfe_static)
+target_link_libraries(bench PRIVATE bfe)
 if (LTO_SUPPORTED)
   set_target_properties(bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()

@@ -74,7 +74,8 @@ namespace std {
 } // namespace std
 
 namespace {
-  constexpr unsigned int REPEATS = 50;
+  constexpr unsigned int REPEATS       = 50;
+  constexpr double FALSE_POSITIVE_PROB = 1.0 / (1 << 10);
 
   template <class T, class I, class... Args>
   auto make_holder(I i, Args&&... args) {
@@ -89,7 +90,7 @@ namespace {
 
     auto start_time = high_resolution_clock::now();
     /* n=2^19 >= 2^12 per day for 3 months, correctness error ~ 2^-10 */
-    bfe_bf_keygen(pk.get(), sk.get(), 32, 1 << 19, 0.0009765625);
+    bfe_bf_keygen(pk.get(), sk.get(), 32, 1 << 19, FALSE_POSITIVE_PROB);
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
 
     microseconds encaps_time{0};
@@ -125,10 +126,10 @@ namespace {
       punc_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
-    std::cout << "bfe keygen: " << keygen_time.count() << " ms\n";
-    std::cout << "bfe encaps: " << encaps_time.count() / REPEATS << " ms\n";
-    std::cout << "bfe decaps: " << decaps_time.count() / REPEATS << " ms\n";
-    std::cout << "bfe punc:   " << punc_time.count() / REPEATS << " ms\n";
+    std::cout << "bfe keygen: " << keygen_time.count() << " µs\n";
+    std::cout << "bfe encaps: " << encaps_time.count() / REPEATS << " µs\n";
+    std::cout << "bfe decaps: " << decaps_time.count() / REPEATS << " µs\n";
+    std::cout << "bfe punc:   " << punc_time.count() / REPEATS << " µs\n";
   }
 
   void bench_tbfe() {
@@ -137,7 +138,7 @@ namespace {
     constexpr unsigned int total_depth       = 10 + 2;
 
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
-                                                 0.0009765625);
+                                                 FALSE_POSITIVE_PROB);
     auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
 
     /* benchmark key generation */
@@ -220,13 +221,13 @@ namespace {
       punc_interval_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
 
-    std::cout << "tbfe keygen:          " << keygen_time.count() << " ms\n";
-    std::cout << "tbfe encaps:          " << encaps_time.count() / REPEATS << " ms\n";
-    std::cout << "tbfe encaps (+ ser):  " << encaps_serialize_time.count() / REPEATS << " ms\n";
-    std::cout << "tbfe decaps:          " << decaps_time.count() / REPEATS << " ms\n";
-    std::cout << "tbfe decaps (+ ser):  " << decaps_serialize_time.count() / REPEATS << " ms\n";
-    std::cout << "tbfe punc:            " << punc_time.count() / REPEATS << " ms\n";
-    std::cout << "tbfe punc (interval): " << punc_interval_time.count() / REPEATS << " ms\n";
+    std::cout << "tbfe keygen:          " << keygen_time.count() << " µs\n";
+    std::cout << "tbfe encaps:          " << encaps_time.count() / REPEATS << " µs\n";
+    std::cout << "tbfe encaps (+ ser):  " << encaps_serialize_time.count() / REPEATS << " µs\n";
+    std::cout << "tbfe decaps:          " << decaps_time.count() / REPEATS << " µs\n";
+    std::cout << "tbfe decaps (+ ser):  " << decaps_serialize_time.count() / REPEATS << " µs\n";
+    std::cout << "tbfe punc:            " << punc_time.count() / REPEATS << " µs\n";
+    std::cout << "tbfe punc (interval): " << punc_interval_time.count() / REPEATS << " µs\n";
   }
 } // namespace
 
