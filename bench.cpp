@@ -132,7 +132,7 @@ namespace {
   }
 
   void bench_tbfe() {
-    /* TODO: use sensible parameters */
+    /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
     constexpr unsigned int bloom_filter_size = 1 << 9;
     constexpr unsigned int total_depth       = 10 + 2;
 
