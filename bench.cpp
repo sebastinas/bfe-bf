@@ -90,9 +90,15 @@ namespace {
 
     auto start_time = high_resolution_clock::now();
     /* n=2^19 >= 2^12 per day for 3 months, correctness error ~ 2^-10 */
-    bfe_bf_keygen(pk.get(), sk.get(), 32, 1 << 19, FALSE_POSITIVE_PROB);
+    static constexpr unsigned int bloom_filter_size = 1 << 19;
+    bfe_bf_keygen(pk.get(), sk.get(), 32, bloom_filter_size, FALSE_POSITIVE_PROB);
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
-    std::cout << "bfe keygen: " << keygen_time.count() << " µs" << std::endl;
+    std::cout << "bfe keygen:           " << keygen_time.count() << " µs" << std::endl;
+    std::cout << "bfe key parameters:" << std::endl;
+    std::cout << "    hash functions:   " << pk.get()->filter_hash_count << std::endl;
+    std::cout << "    num elements:     " << bloom_filter_size << std::endl;
+    std::cout << "    bloomfilter size: " << pk.get()->filter_size << std::endl;
+    std::cout << "    correctness err:  " << FALSE_POSITIVE_PROB << std::endl;
 
     microseconds encaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
@@ -103,7 +109,7 @@ namespace {
       bfe_bf_encaps(ciphertext.get(), K, pk.get());
       encaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
-    std::cout << "bfe encaps: " << encaps_time.count() / REPEATS << " µs" << std::endl;
+    std::cout << "bfe encaps:           " << encaps_time.count() / REPEATS << " µs" << std::endl;
 
     microseconds decaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
@@ -116,7 +122,7 @@ namespace {
       bfe_bf_decaps(decrypted, pk.get(), sk.get(), ciphertext.get());
       decaps_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
-    std::cout << "bfe decaps: " << decaps_time.count() / REPEATS << " µs" << std::endl;
+    std::cout << "bfe decaps:           " << decaps_time.count() / REPEATS << " µs" << std::endl;
 
     microseconds punc_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
@@ -128,7 +134,7 @@ namespace {
       bfe_bf_puncture(sk.get(), ciphertext.get());
       punc_time += duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     }
-    std::cout << "bfe punc:   " << punc_time.count() / REPEATS << " µs" << std::endl;
+    std::cout << "bfe punc:             " << punc_time.count() / REPEATS << " µs" << std::endl;
   }
 
   void bench_tbfe() {
@@ -145,6 +151,11 @@ namespace {
     tbfe_bbg_keygen(pk.get(), sk.get());
     auto keygen_time = duration_cast<microseconds>(high_resolution_clock::now() - start_time);
     std::cout << "tbfe keygen:          " << keygen_time.count() << " µs" << std::endl;
+    std::cout << "tbfe key parameters:" << std::endl;
+    std::cout << "    hash functions:   " << pk.get()->bloom_filter_hashes << std::endl;
+    std::cout << "    num elements:     " << bloom_filter_size << std::endl;
+    std::cout << "    bloomfilter size: " << pk.get()->bloom_filter_size << std::endl;
+    std::cout << "    correctness err:  " << FALSE_POSITIVE_PROB << std::endl;
 
     /* benchmark encaps */
     microseconds encaps_time{0};
