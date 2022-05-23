@@ -71,7 +71,7 @@ void zp_div(bn_t c, const bn_t a, const bn_t b) {
   bn_t s;
   bn_null(s);
 
-  TRY {
+  RLC_TRY {
     bn_new(s);
 
     bn_gcd_ext(s, c, NULL, b, order);
@@ -85,7 +85,7 @@ void zp_div(bn_t c, const bn_t a, const bn_t b) {
       bn_div_rem(s, c, s, order);
     }
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(s);
   }
 }

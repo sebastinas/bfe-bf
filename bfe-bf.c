@@ -30,11 +30,11 @@ static void bf_get_bit_positions(unsigned int* positions, const ep_t input, unsi
 static int ibe_keygen(bn_t secret_key, bfe_bf_public_key_t* public_key) {
   int status = BFE_SUCCESS;
 
-  TRY {
+  RLC_TRY {
     zp_rand(secret_key);
     ep_mul_gen(public_key->public_key, secret_key);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
 
@@ -47,15 +47,15 @@ static int ibe_extract(ep2_t extracted_key, const bn_t secret_key, const uint8_t
 
   ep2_t qid;
   ep2_null(qid);
-  TRY {
+  RLC_TRY {
     ep2_new(qid);
     ep2_map(qid, id, id_size);
     ep2_mul(extracted_key, qid, secret_key);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     ep2_free(qid);
   }
   return status;
@@ -108,7 +108,7 @@ static int ibe_encrypt(uint8_t* dst, ep_t pkr, const uint8_t* id, size_t id_len,
   ep2_null(qid);
   fp12_null(t);
 
-  TRY {
+  RLC_TRY {
     ep2_new(qid);
     fp12_new(t);
 
@@ -119,10 +119,10 @@ static int ibe_encrypt(uint8_t* dst, ep_t pkr, const uint8_t* id, size_t id_len,
 
     hash_and_xor(dst, message_len, message, t);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     fp12_free(t);
     ep2_free(qid);
   };
@@ -136,16 +136,16 @@ static int ibe_decrypt(uint8_t* message, ep_t g1r, const uint8_t* Kxored, size_t
   fp12_t t;
   fp12_null(t);
 
-  TRY {
+  RLC_TRY {
     fp12_new(t);
     pp_map_k12(t, g1r, secret_key);
 
     hash_and_xor(message, length, Kxored, t);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     fp12_free(t);
   };
 
@@ -181,10 +181,10 @@ int bfe_bf_init_public_key(bfe_bf_public_key_t* public_key) {
 
   int status = BFE_SUCCESS;
   ep_null(public_key->public_key);
-  TRY {
+  RLC_TRY {
     ep_new(public_key->public_key);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
 
@@ -229,7 +229,7 @@ int bfe_bf_keygen(bfe_bf_public_key_t* public_key, bfe_bf_secret_key_t* secret_k
 
   bn_t sk;
   bn_null(sk);
-  TRY {
+  RLC_TRY {
     bn_new(sk);
 
     /* generate IBE key */
@@ -244,10 +244,10 @@ int bfe_bf_keygen(bfe_bf_public_key_t* public_key, bfe_bf_secret_key_t* secret_k
       }
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(sk);
   }
 
@@ -262,7 +262,7 @@ static int internal_encrypt(bfe_bf_ciphertext_t* ciphertext, const bfe_bf_public
   ep_t pkr;
   ep_null(pkr);
 
-  TRY {
+  RLC_TRY {
     ep_new(pkr);
 
     /* g_1^r */
@@ -281,10 +281,10 @@ static int internal_encrypt(bfe_bf_ciphertext_t* ciphertext, const bfe_bf_public
                             sizeof(id), K, public_key->key_size);
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     ep_free(pkr);
   }
 
@@ -300,7 +300,7 @@ int bfe_bf_encaps(bfe_bf_ciphertext_t* ciphertext, uint8_t* Kout,
   bn_t r;
   bn_null(r);
 
-  TRY {
+  RLC_TRY {
     bn_new(r);
 
     Keccak_HashInstance shake;
@@ -314,10 +314,10 @@ int bfe_bf_encaps(bfe_bf_ciphertext_t* ciphertext, uint8_t* Kout,
       Keccak_HashSqueeze(&shake, Kout, public_key->key_size * 8);
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(r);
   }
 #if defined(HAVE_EXPLICIT_BZERO)
@@ -381,7 +381,7 @@ int bfe_bf_decaps(uint8_t* key, const bfe_bf_public_key_t* public_key,
   bn_t r;
   bn_null(r);
 
-  TRY {
+  RLC_TRY {
     bn_new(r);
 
     Keccak_HashInstance shake;
@@ -398,10 +398,10 @@ int bfe_bf_decaps(uint8_t* key, const bfe_bf_public_key_t* public_key,
       status = BFE_ERROR;
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(r);
     bfe_bf_clear_ciphertext(&check_ciphertext);
   }
@@ -417,10 +417,10 @@ static int init_ciphertext(bfe_bf_ciphertext_t* ciphertext, unsigned int hash_co
   int status = BFE_SUCCESS;
 
   ep_null(ciphertext->u);
-  TRY {
+  RLC_TRY {
     ep_new(ciphertext->u);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
 
@@ -471,12 +471,12 @@ int bfe_bf_ciphertext_deserialize(bfe_bf_ciphertext_t* ciphertext, const uint8_t
   }
 
   int status = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     ep_read_bin(ciphertext->u, src, EP_SIZE);
     ciphertext->v_size = v_size;
     memcpy(ciphertext->v, &src[EP_SIZE], v_size);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
 
@@ -500,10 +500,10 @@ int bfe_bf_public_key_deserialize(bfe_bf_public_key_t* public_key, const uint8_t
   public_key->key_size          = read_u32(&src);
 
   int status = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     ep_read_bin(public_key->public_key, src, EP_SIZE);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
 
@@ -533,7 +533,7 @@ int bfe_bf_secret_key_deserialize(bfe_bf_secret_key_t* secret_key, const uint8_t
   secret_key->secret_keys     = calloc(secret_key->filter.bitset.size, sizeof(ep2_t));
 
   int status = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     for (unsigned int i = 0; i < secret_key->filter.bitset.size; ++i) {
       if (bitset_get(&secret_key->filter.bitset, i) == 0) {
         ep2_new(secret_key->secret_keys[i]);
@@ -542,7 +542,7 @@ int bfe_bf_secret_key_deserialize(bfe_bf_secret_key_t* secret_key, const uint8_t
       }
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     status = BFE_ERROR;
   }
 

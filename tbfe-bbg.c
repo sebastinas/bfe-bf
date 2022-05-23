@@ -136,10 +136,10 @@ static int bbg_init_master_key(bbg_master_key_t* mk) {
   int ret = BFE_SUCCESS;
 
   g1_null(mk->mk);
-  TRY {
+  RLC_TRY {
     g1_new(mk->mk);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
   return ret;
@@ -160,10 +160,10 @@ static int bbg_init_public_key(bbg_public_key_t* pk) {
   int ret = BFE_SUCCESS;
 
   gt_null(pk->pk);
-  TRY {
+  RLC_TRY {
     gt_new(pk->pk);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
   return ret;
@@ -201,7 +201,7 @@ static int bbg_init_public_params(bbg_public_params_t* params, unsigned int dept
   }
 
   int ret = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     g1_new(params->g);
     g2_new(params->g_hat);
     g1_new(params->g2);
@@ -213,7 +213,7 @@ static int bbg_init_public_params(bbg_public_params_t* params, unsigned int dept
       g1_new(params->h_precomputation_tables[i]);
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -232,7 +232,7 @@ static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
   }
 
   int ret = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     read_g1(params->g, &serialized);
     read_g2(params->g_hat, &serialized);
     read_g1(params->g2, &serialized);
@@ -243,7 +243,7 @@ static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
       g1_mul_pre(params->h_precomputation_tables + i * RLC_EP_TABLE, params->h[i]);
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -299,7 +299,7 @@ static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_le
     g1_null(sk->b[idx]);
   }
 
-  TRY {
+  RLC_TRY {
     g1_new(sk->a0);
     g2_new(sk->a1);
     g1_new(sk->associated_id);
@@ -308,7 +308,7 @@ static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_le
       g1_new(sk->b[idx]);
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -347,13 +347,13 @@ static int ots_init_sk(bbg_ots_sk_t* ots_sk) {
   bn_null(ots_sk->rs);
   bn_null(ots_sk->ss);
 
-  TRY {
+  RLC_TRY {
     bn_new(ots_sk->xs);
     bn_new(ots_sk->ys);
     bn_new(ots_sk->rs);
     bn_new(ots_sk->ss);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -385,12 +385,12 @@ static int bbg_init_ots_public_key(bbg_ots_pk_t* ots_pk) {
   g1_null(ots_pk->hs);
   g1_null(ots_pk->cs);
 
-  TRY {
+  RLC_TRY {
     g1_new(ots_pk->fs);
     g1_new(ots_pk->hs);
     g1_new(ots_pk->cs);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -414,11 +414,11 @@ static int bbg_init_ots(bbg_ots_t* ots) {
 
   bn_null(ots->r);
   bn_null(ots->s);
-  TRY {
+  RLC_TRY {
     bn_new(ots->r);
     bn_new(ots->s);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -443,12 +443,12 @@ static int bbg_init_ciphertext(bbg_ciphertext_t* ciphertext) {
   g2_null(ciphertext->b);
   g1_null(ciphertext->c);
 
-  TRY {
+  RLC_TRY {
     gt_new(ciphertext->a);
     g2_new(ciphertext->b);
     g1_new(ciphertext->c);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -471,10 +471,10 @@ static int bbg_init_key(bbg_key_t* key) {
   int ret = BFE_SUCCESS;
 
   gt_null(key->k);
-  TRY {
+  RLC_TRY {
     gt_new(key->k);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
 
@@ -487,10 +487,10 @@ static int bbg_sample_key(bbg_key_t* key) {
   }
 
   int ret = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     gt_rand(key->k);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     ret = BFE_ERROR;
   }
   return ret;
@@ -513,7 +513,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
   bn_t alpha;
   bn_null(alpha);
 
-  TRY {
+  RLC_TRY {
     g2_new(original_public_key_pk);
     bn_new(alpha);
 
@@ -538,10 +538,10 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
 
     public_params->max_delegatable_depth = total_depth - 1;
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(alpha);
     g2_free(original_public_key_pk);
   }
@@ -569,13 +569,13 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
     bn_null(identity_zp_vector[i]);
   }
 
-  TRY {
+  RLC_TRY {
     for (size_t i = 0; i < identity->depth; ++i) {
       bn_new(identity_zp_vector[i]);
       bbg_hash_id(identity_zp_vector[i], identity->id[i], IDENTITY_PREFIX);
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
 
@@ -599,7 +599,7 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
   g1_null(h_i_to_the_identity_i);
   bn_null(v);
 
-  TRY {
+  RLC_TRY {
     g1_new(secret_key_associated_id);
 
     g1_new(h_i_to_the_identity_i);
@@ -631,10 +631,10 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     result_status                      = bbg_copy_identity(&secret_key->identity, identity);
     secret_key->num_delegatable_levels = num_delegatable_levels;
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     g1_free(h_i_to_the_identity_i);
 
     for (size_t i = 0; i < identity->depth; ++i) {
@@ -671,7 +671,7 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
   bn_null(w);
   bn_null(u);
 
-  TRY {
+  RLC_TRY {
     bn_new(w);
     bn_new(u);
 
@@ -698,10 +698,10 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
     result_status                      = bbg_copy_identity(&secret_key->identity, identity);
     secret_key->num_delegatable_levels = num_delegatable_levels;
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(u);
     bn_free(w);
   }
@@ -725,7 +725,7 @@ static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_publi
   bn_null(u);
   g1_t tmp;
   g1_null(tmp);
-  TRY {
+  RLC_TRY {
     bn_new(u);
     g1_new(tmp);
 
@@ -756,10 +756,10 @@ static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_publi
     g2_mul(ciphertext->b, public_params->g_hat, u);
     g1_mul(ciphertext->c, ciphertext->c, u);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     g1_free(tmp);
     bn_free(u);
   }
@@ -796,7 +796,7 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
   g2_null(g2s[0]);
   g2_null(g2s[1]);
 
-  TRY {
+  RLC_TRY {
     bn_new(u);
     bn_new(w);
     g1_new(g1s[0]);
@@ -838,10 +838,10 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
     pc_map_sim(key->k, g1s, g2s, 2);
     gt_mul(key->k, key->k, ciphertext->a);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     g2_free(g2s[1]);
     g2_free(g2s[0]);
     g1_free(g1s[1]);
@@ -862,7 +862,7 @@ static int ots_keygen(bbg_ots_sk_t* secret_key, bbg_ots_pk_t* public_key,
                       bbg_public_params_t* public_params) {
   int result_status = BFE_SUCCESS;
 
-  TRY {
+  RLC_TRY {
     // Choose a random s, x_s, y_s, r_s, s_s from Z_p^*.
     zp_rand(secret_key->xs);
     zp_rand(secret_key->ys);
@@ -874,7 +874,7 @@ static int ots_keygen(bbg_ots_sk_t* secret_key, bbg_ots_pk_t* public_key,
     g1_mul(public_key->hs, public_params->g, secret_key->ys);
     g1_mul_sim(public_key->cs, public_key->fs, secret_key->rs, public_key->hs, secret_key->ss);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
 
@@ -889,7 +889,7 @@ static int ots_sign(bbg_ots_t* ots, vector_t* ciphertexts, bbg_ots_sk_t* ots_sk)
   bn_null(ciphertext_hash);
   bn_null(tmp);
 
-  TRY {
+  RLC_TRY {
     bn_new(ciphertext_hash);
     bn_new(tmp);
 
@@ -908,10 +908,10 @@ static int ots_sign(bbg_ots_t* ots, vector_t* ciphertexts, bbg_ots_sk_t* ots_sk)
     zp_sub(tmp, ots->s, ciphertext_hash);
     zp_div(ots->s, tmp, ots_sk->ys);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     bn_free(tmp);
     bn_free(ciphertext_hash);
   }
@@ -931,7 +931,7 @@ static int ots_verify(vector_t* ciphertexts, bbg_ots_t* ots, bbg_ots_pk_t* ots_p
   g1_null(tmp1);
   g1_null(tmp2);
 
-  TRY {
+  RLC_TRY {
     bn_new(ciphertext_hash);
 
     g1_new(tmp1);
@@ -951,10 +951,10 @@ static int ots_verify(vector_t* ciphertexts, bbg_ots_t* ots, bbg_ots_pk_t* ots_p
       result_status = BFE_ERROR;
     }
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {
+  RLC_FINALLY {
     g1_free(tmp2);
     g1_free(tmp1);
 
@@ -966,16 +966,16 @@ static int ots_verify(vector_t* ciphertexts, bbg_ots_t* ots, bbg_ots_pk_t* ots_p
 
 static int bbg_convert_key_to_bit_string(uint8_t* bit_string, bbg_key_t* key) {
   int result_status = BFE_SUCCESS;
-  TRY {
+  RLC_TRY {
     // Hash binary represented bit string.
     uint8_t serialized_key[GT_SIZE_COMPRESSED];
     gt_write_bin(serialized_key, GT_SIZE_COMPRESSED, key->k, 1);
     md_kdf(bit_string, SECURITY_PARAMETER, serialized_key, GT_SIZE_COMPRESSED);
   }
-  CATCH_ANY {
+  RLC_CATCH_ANY {
     result_status = BFE_ERROR;
   }
-  FINALLY {}
+  RLC_FINALLY {}
 
   return result_status;
 }

@@ -7,6 +7,13 @@
 
 #include <relic/relic.h>
 
+#if !defined(RLC_TRY)
+// error-handling macros have been renamed
+#define RLC_TRY TRY
+#define RLC_CATCH_ANY CATCH_ANY
+#define RLC_FINALLY FINALLY
+#endif
+
 #include "FIPS202-opt64/KeccakHash.h"
 
 #define G1_SIZE_COMPRESSED (1 + RLC_FP_BYTES)
