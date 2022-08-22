@@ -1597,6 +1597,16 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
     goto clear;
   }
 
+  // If the ciphertext variable is re-used, old items have to be remove from the vector
+  if (vector_size(ciphertext->Cs)) {
+    for (size_t idx = 0; idx < vector_size(ciphertext->Cs); ++idx) {
+      bbg_ciphertext_t* ct = vector_get(ciphertext->Cs, idx);
+      bbg_clear_ciphertext(ct);
+      free(ct);
+    }
+    vector_clear(ciphertext->Cs);
+  }
+
   // Generate random c.
   rand_bytes(ciphertext->c, SECURITY_PARAMETER);
 
