@@ -340,7 +340,7 @@ Ensure(TBFE, same_key_returned_by_encapsulate_and_decapsulate_with_serialization
   assert_that(
       tbfe_bbg_ciphertext_deserialize(&deserialized_ciphertext, serialized_ciphertext),
       is_equal_to(BFE_SUCCESS));
-  assert_that(tbfe_bbg_decaps(decapsulated_key, &deserialized_ciphertext, &secret_key, &public_key),
+  assert_that(tbfe_bbg_decaps(decapsulated_key, &deserialized_ciphertext, &secret_key, &deserialized_public_key),
               is_equal_to(BFE_SUCCESS));
   assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
 
@@ -351,6 +351,156 @@ Ensure(TBFE, same_key_returned_by_encapsulate_and_decapsulate_with_serialization
   tbfe_bbg_clear_ciphertext(&deserialized_ciphertext);
   free(serialized_ciphertext);
   free(serialized_public_key);
+  
+}
+
+Ensure(TBFE, interval_puncture_same_key_returned_by_encapsulate_and_decapsulate) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t punctured_key[SECURITY_PARAMETER];
+  uint8_t decapsulated_punctured_key[SECURITY_PARAMETER];
+
+  tbfe_bbg_init_public_key(&public_key, total_depth);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+  
+  assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 2), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 3), is_equal_to(BFE_SUCCESS));
+
+  assert_that(tbfe_bbg_encaps(punctured_key, &ciphertext, &public_key, 3), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_decaps(decapsulated_punctured_key, &ciphertext, &secret_key, &public_key),
+              is_equal_to(BFE_SUCCESS));
+
+  assert_that(punctured_key, is_equal_to_contents_of(decapsulated_punctured_key, SECURITY_PARAMETER));
+  
+
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+}
+
+Ensure(TBFE, interval_puncture_after_encapsulate_and_decapsulate) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t key[SECURITY_PARAMETER];
+  uint8_t decapsulated_key[SECURITY_PARAMETER];
+
+  tbfe_bbg_init_public_key(&public_key, total_depth);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+  
+  assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
+              is_equal_to(BFE_SUCCESS));
+  assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+
+  assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 2), is_equal_to(BFE_SUCCESS));
+
+  assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 2), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
+              is_equal_to(BFE_SUCCESS));
+  assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+  
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+}
+
+Ensure(TBFE, same_key_returned_by_multiple_encapsulate_and_decapsulate) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t key[SECURITY_PARAMETER];
+  uint8_t decapsulated_key[SECURITY_PARAMETER];
+
+  tbfe_bbg_init_public_key(&public_key, total_depth);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+  
+  for (size_t i = 0; i < 10; i++)
+  {
+    assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
+    assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
+                is_equal_to(BFE_SUCCESS));
+    assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+  }
+
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+}
+
+Ensure(TBFE, same_key_returned_by_multiple_encapsulate_and_decapsulate_with_ciphertext_puncture) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t key[SECURITY_PARAMETER];
+  uint8_t decapsulated_key[SECURITY_PARAMETER];
+
+  tbfe_bbg_init_public_key(&public_key, total_depth);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+  
+  for (size_t i = 0; i < 10; i++)
+  {
+    assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
+    assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
+                is_equal_to(BFE_SUCCESS));
+    assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+    assert_that(tbfe_bbg_puncture_ciphertext(&secret_key, &ciphertext), is_equal_to(BFE_SUCCESS));
+  }
+
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+
+}
+
+Ensure(TBFE, puncture_interval_same_key_returned_by_multiple_encapsulate_and_decapsulate) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t key[SECURITY_PARAMETER];
+  uint8_t decapsulated_key[SECURITY_PARAMETER];
+
+  tbfe_bbg_init_public_key(&public_key, total_depth);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+  
+  for (size_t i = 0; i < 10; i++)
+  {
+    assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 1), is_equal_to(BFE_SUCCESS));
+    assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
+                is_equal_to(BFE_SUCCESS));
+    assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+  }
+
+  assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 2), is_equal_to(BFE_SUCCESS));
+
+  for (size_t i = 0; i < 10; i++)
+  {
+    assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 2), is_equal_to(BFE_SUCCESS));
+    assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &secret_key, &public_key),
+                is_equal_to(BFE_SUCCESS));
+    assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+  }
+
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+
 }
 
 int main(void) {
@@ -367,5 +517,13 @@ int main(void) {
   add_test_with_context(suite, TBFE, ciphertext_serialization);
   add_test_with_context(suite, TBFE,
                         same_key_returned_by_encapsulate_and_decapsulate_with_serialization);
+  add_test_with_context(suite, TBFE,
+                        interval_puncture_same_key_returned_by_encapsulate_and_decapsulate);
+  add_test_with_context(suite, TBFE, interval_puncture_after_encapsulate_and_decapsulate);
+  add_test_with_context(suite, TBFE, same_key_returned_by_multiple_encapsulate_and_decapsulate);
+  add_test_with_context(suite, TBFE,
+                        same_key_returned_by_multiple_encapsulate_and_decapsulate_with_ciphertext_puncture);
+  add_test_with_context(suite, TBFE,
+                        puncture_interval_same_key_returned_by_multiple_encapsulate_and_decapsulate);
   return run_test_suite(suite, create_text_reporter());
 }
