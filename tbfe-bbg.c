@@ -706,9 +706,9 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
                                               bbg_master_key_t* master_key,
                                               const bbg_identity_t* identity,
                                               bbg_public_params_t* public_params) {
-  const unsigned total_depth            = public_params->max_delegatable_depth + 1;
-  const unsigned num_total_levels       = total_depth - identity->depth;
-  const unsigned num_delegatable_levels = num_total_levels - 1;
+  // const unsigned total_depth            = public_params->max_delegatable_depth + 1;
+  // const unsigned num_total_levels       = total_depth - identity->depth;
+  // const unsigned num_delegatable_levels = num_total_levels - 1;
 
   int result_status = BFE_SUCCESS;
 
@@ -743,13 +743,13 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     g1_add(secret_key->a0, master_key->mk, secret_key->a0);
     g2_mul(secret_key->a1, public_params->g_hat, v);
 
-    for (size_t i = 0; i < num_total_levels; ++i) {
+    for (size_t i = 0; i < secret_key->num_delegatable_levels; ++i) {
       g1_mul_fix(secret_key->b[i],
                  &public_params->h_precomputation_tables[(identity->depth + i) * RLC_EP_TABLE], v);
     }
 
     result_status                      = bbg_copy_identity(&secret_key->identity, identity);
-    secret_key->num_delegatable_levels = num_delegatable_levels;
+    // secret_key->num_delegatable_levels = num_delegatable_levels;
   }
   RLC_CATCH_ANY {
     result_status = BFE_ERROR;
@@ -774,14 +774,13 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
                                           bbg_public_params_t* public_params) {
 
   const unsigned total_depth = public_params->max_delegatable_depth + 1;
-  const unsigned parent_depth =
-      public_params->max_delegatable_depth - parent_secret_key->num_delegatable_levels;
+  const unsigned parent_depth = total_depth - parent_secret_key->num_delegatable_levels;
   if (parent_depth != (identity->depth - 1)) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  const unsigned num_total_levels       = total_depth - identity->depth;
-  const unsigned num_delegatable_levels = num_total_levels - 1;
+  // const unsigned num_total_levels       = total_depth - identity->depth;
+  // const unsigned num_delegatable_levels = num_total_levels - 1;
 
   int result_status = BFE_SUCCESS;
 
@@ -809,14 +808,14 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
     g2_mul(secret_key->a1, public_params->g_hat, u);
     g2_add(secret_key->a1, parent_secret_key->a1, secret_key->a1);
 
-    for (size_t i = 0; i < num_total_levels; ++i) {
+    for (size_t i = 0; i < secret_key->num_delegatable_levels; ++i) {
       g1_mul_fix(secret_key->b[i],
                  &public_params->h_precomputation_tables[(identity->depth + i) * RLC_EP_TABLE], u);
       g1_add(secret_key->b[i], secret_key->b[i], parent_secret_key->b[i + 1]);
     }
 
     result_status                      = bbg_copy_identity(&secret_key->identity, identity);
-    secret_key->num_delegatable_levels = num_delegatable_levels;
+    // secret_key->num_delegatable_levels = num_delegatable_levels;
   }
   RLC_CATCH_ANY {
     result_status = BFE_ERROR;
