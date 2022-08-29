@@ -503,6 +503,121 @@ Ensure(TBFE, puncture_interval_same_key_returned_by_multiple_encapsulate_and_dec
 
 }
 
+Ensure(TBFE, secret_key_serialization_at_leaf) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t key[SECURITY_PARAMETER];
+  uint8_t decapsulated_key[SECURITY_PARAMETER];
+  uint8_t decapsulated_punctured_key[SECURITY_PARAMETER];
+  tbfe_bbg_secret_key_t deserialized_secret_key;
+  tbfe_bbg_secret_key_t deserialized_punctured_secret_key;
+
+  tbfe_bbg_init_public_key(&public_key, 5);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+ assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+ assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 2), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_puncture_interval(&secret_key, &public_key, 3), is_equal_to(BFE_SUCCESS));
+
+
+  assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 3), is_equal_to(BFE_SUCCESS));
+
+  uint8_t* serialized_secret_key = malloc(tbfe_bbg_secret_key_size(&secret_key));
+  tbfe_bbg_secret_key_serialize(serialized_secret_key, &secret_key);
+
+  assert_that(
+      tbfe_bbg_secret_key_deserialize(&deserialized_secret_key, serialized_secret_key),
+      is_equal_to(BFE_SUCCESS));
+
+  assert_true(tbfe_bbg_secret_keys_are_equal(&secret_key, &deserialized_secret_key));
+
+  assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &deserialized_secret_key, &public_key),
+              is_equal_to(BFE_SUCCESS));
+  assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+
+  assert_that(tbfe_bbg_puncture_ciphertext(&secret_key, &ciphertext), is_equal_to(BFE_SUCCESS));
+  uint8_t* serialized_punctured_secret_key = malloc(tbfe_bbg_secret_key_size(&secret_key));
+  tbfe_bbg_secret_key_serialize(serialized_punctured_secret_key, &secret_key);
+
+  assert_that(tbfe_bbg_secret_key_deserialize(&deserialized_punctured_secret_key,
+                                                       serialized_punctured_secret_key),
+              is_equal_to(BFE_SUCCESS));
+  assert_true(tbfe_bbg_secret_keys_are_equal(&secret_key, &deserialized_punctured_secret_key));
+
+ assert_that(tbfe_bbg_decaps(decapsulated_punctured_key, &ciphertext,
+                              &deserialized_punctured_secret_key, &public_key),
+              is_not_equal_to(BFE_SUCCESS));
+  
+
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+  tbfe_bbg_clear_secret_key(&deserialized_secret_key);
+  tbfe_bbg_clear_secret_key(&deserialized_punctured_secret_key);
+  free(serialized_secret_key);
+  free(serialized_punctured_secret_key);
+}
+
+Ensure(TBFE, secret_key_serialization_before_puncturing) {
+  tbfe_bbg_secret_key_t secret_key;
+  tbfe_bbg_public_key_t public_key;
+  tbfe_bbg_ciphertext_t ciphertext;
+  uint8_t key[SECURITY_PARAMETER];
+  uint8_t decapsulated_key[SECURITY_PARAMETER];
+  uint8_t decapsulated_punctured_key[SECURITY_PARAMETER];
+  tbfe_bbg_secret_key_t deserialized_secret_key;
+  tbfe_bbg_secret_key_t deserialized_punctured_secret_key;
+
+  tbfe_bbg_init_public_key(&public_key, 5);
+  tbfe_bbg_init_secret_key(&secret_key, bloom_filter_size, false_positive_prob);
+  tbfe_bbg_init_ciphertext(&ciphertext);
+
+  assert_that(tbfe_bbg_keygen(&public_key, &secret_key), is_equal_to(BFE_SUCCESS));
+
+  uint8_t* serialized_secret_key = malloc(tbfe_bbg_secret_key_size(&secret_key));
+  tbfe_bbg_secret_key_serialize(serialized_secret_key, &secret_key);
+
+  assert_that(
+      tbfe_bbg_secret_key_deserialize(&deserialized_secret_key, serialized_secret_key),
+      is_equal_to(BFE_SUCCESS));
+  
+  assert_true(tbfe_bbg_secret_keys_are_equal(&secret_key, &deserialized_secret_key));
+
+
+  assert_that(tbfe_bbg_puncture_interval(&deserialized_secret_key, &public_key, 2), is_equal_to(BFE_SUCCESS));
+  assert_that(tbfe_bbg_puncture_interval(&deserialized_secret_key, &public_key, 3), is_equal_to(BFE_SUCCESS));
+
+  assert_that(tbfe_bbg_encaps(key, &ciphertext, &public_key, 3), is_equal_to(BFE_SUCCESS));
+
+  assert_that(tbfe_bbg_decaps(decapsulated_key, &ciphertext, &deserialized_secret_key, &public_key),
+              is_equal_to(BFE_SUCCESS));
+  assert_that(key, is_equal_to_contents_of(decapsulated_key, SECURITY_PARAMETER));
+
+  assert_that(tbfe_bbg_puncture_ciphertext(&secret_key, &ciphertext), is_equal_to(BFE_SUCCESS));
+  uint8_t* serialized_punctured_secret_key = malloc(tbfe_bbg_secret_key_size(&secret_key));
+  tbfe_bbg_secret_key_serialize(serialized_punctured_secret_key, &secret_key);
+
+  assert_that(tbfe_bbg_secret_key_deserialize(&deserialized_punctured_secret_key,
+                                                       serialized_punctured_secret_key),
+              is_equal_to(BFE_SUCCESS));
+  assert_true(tbfe_bbg_secret_keys_are_equal(&secret_key, &deserialized_punctured_secret_key));
+
+ assert_that(tbfe_bbg_decaps(decapsulated_punctured_key, &ciphertext,
+                              &deserialized_punctured_secret_key, &public_key),
+              is_not_equal_to(BFE_SUCCESS));
+  
+
+  tbfe_bbg_clear_public_key(&public_key);
+  tbfe_bbg_clear_secret_key(&secret_key);
+  tbfe_bbg_clear_ciphertext(&ciphertext);
+  tbfe_bbg_clear_secret_key(&deserialized_secret_key);
+  tbfe_bbg_clear_secret_key(&deserialized_punctured_secret_key);
+  free(serialized_secret_key);
+  free(serialized_punctured_secret_key);
+}
+
 int main(void) {
   TestSuite* suite = create_test_suite();
   add_test_with_context(suite, TBFE, same_key_returned_by_encapsulate_and_decapsulate);
@@ -525,5 +640,7 @@ int main(void) {
                         same_key_returned_by_multiple_encapsulate_and_decapsulate_with_ciphertext_puncture);
   add_test_with_context(suite, TBFE,
                         puncture_interval_same_key_returned_by_multiple_encapsulate_and_decapsulate);
+  add_test_with_context(suite, TBFE, secret_key_serialization_at_leaf);
+  add_test_with_context(suite, TBFE, secret_key_serialization_before_puncturing);
   return run_test_suite(suite, create_text_reporter());
 }
