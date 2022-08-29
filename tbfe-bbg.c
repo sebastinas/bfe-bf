@@ -2528,7 +2528,7 @@ bool tbfe_bbg_ciphertexts_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertex
   return true;
 }
 
-bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_t* r){
-	return (memcmp(l->eddsa.sig, r->eddsa.sig, Ed25519_SIG_BYTES)==0 ? true : false);
+bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_t* r) {
+  return memcmp(l->eddsa.sig, r->eddsa.sig, Ed25519_SIG_BYTES) == 0;
 }
 #endif
