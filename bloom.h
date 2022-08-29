@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 /* bitset implementation */
-
+// How many uint64 words are needed to store 'size-many' bits
 #define BITSET_WORD_BITS (8 * sizeof(uint64_t))
 #define BITSET_SIZE(size) (((size) + BITSET_WORD_BITS - 1) / BITSET_WORD_BITS)
 
