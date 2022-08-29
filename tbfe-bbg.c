@@ -216,9 +216,9 @@ bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_
  */
 ///@{ 
 
-static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk){
-  if(eddsa_sk){
-    memset(eddsa_sk->key, 0, Ed25519_KEY_BYTES);
+static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk) {
+  if (eddsa_sk) {
+    explicit_bzero(eddsa_sk->key, Ed25519_KEY_BYTES);
   }
 }
 
