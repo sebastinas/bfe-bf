@@ -1342,8 +1342,7 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     }
 
     // Upate identity of secret key (e.g. identity associated with the key)
-    result_status                      = bbg_copy_identity(&secret_key->identity, identity);
-    // secret_key->num_delegatable_levels = num_delegatable_levels;
+    result_status = bbg_copy_identity(&secret_key->identity, identity);
   }
   // Clean up if errors occured
   RLC_CATCH_ANY {
@@ -1440,8 +1439,7 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
     }
 
     // Update identity of secret key (e.g. identity associated with the key)
-    result_status                      = bbg_copy_identity(&secret_key->identity, identity);
-    // secret_key->num_delegatable_levels = num_delegatable_levels;
+    result_status = bbg_copy_identity(&secret_key->identity, identity);
   }
   // Clean up if errors occured
   RLC_CATCH_ANY {
