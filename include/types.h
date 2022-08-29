@@ -16,7 +16,16 @@
 #include <omp.h>
 #include <relic/relic.h>
 
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+
 #define SECURITY_PARAMETER 32
+
+// Size of EdDSA keys in bytes (32 bytes -> 256 bits)
+#define Ed25519_KEY_BYTES 32
+// Size of EdDSA signature in bytes (64 bytes -> 512 bits)
+#define Ed25519_SIG_BYTES 64
+
 
 BFE_BEGIN_CDECL
 
@@ -28,6 +37,13 @@ typedef enum {
   BFE_ERROR_INVALID_PARAM = 2, /**< An invalid parameter was given */
   BFE_ERROR_KEY_PUNCTURED = 3, /**< The key was already punctured */
 } bfe_bf_error_t;
+
+// Error codes for OpenSSL EVP
+typedef enum {
+  EVP_FAILURE = 0,             /**< An error occurred */
+  EVP_SUCCESS = 1,             /**< All operations were successful */
+} evp_error_t;
+
 
 /* bloom filter */
 
@@ -81,25 +97,25 @@ typedef struct {
 } bbg_public_params_t;
 
 /**
- * Public key of a OTS
- *
- * @internal
+ * EdDSA public key 
  */
 typedef struct {
-  g1_t fs;
-  g1_t hs;
-  g1_t cs;
-} bbg_ots_pk_t;
+  unsigned char key[Ed25519_KEY_BYTES]; /**< Unsigned byte array containing the RAW public key */
+} eddsa_pk_t;
 
 /**
- * Signature of a OTS
- *
- * @internal
+ * EdDSA secret key 
  */
 typedef struct {
-  bn_t r;
-  bn_t s;
-} bbg_ots_t;
+  unsigned char key[Ed25519_KEY_BYTES]; /**< Unsigned byte array containing the RAW private key */
+} eddsa_sk_t;
+
+/**
+ * EdDSA Signature
+ */
+typedef struct {
+  unsigned char sig[Ed25519_SIG_BYTES]; /**< Unsigned byte array representing the signature */
+} eddsa_sig_t;
 
 /**
  * TB-BFE PKEM public key
@@ -126,12 +142,14 @@ typedef struct {
  * TB-BFE PKEM ciphertext
  */
 typedef struct {
-  uint8_t c[SECURITY_PARAMETER];
-  vector_t* Cs;
-  bbg_ots_t ots;
-  bbg_ots_pk_t ots_pk;
-  unsigned int time_interval;
+  uint8_t c[SECURITY_PARAMETER];  
+  vector_t* Cs;                   
+  eddsa_sig_t eddsa;              
+  eddsa_pk_t eddsa_pk;            
+  unsigned int time_interval;    
 } tbfe_bbg_ciphertext_t;
+
+
 
 BFE_END_CDECL
 

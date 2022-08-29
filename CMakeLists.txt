@@ -48,6 +48,7 @@ check_ipo_supported(RESULT LTO_SUPPORTED)
 find_package(relic REQUIRED)
 find_package(Doxygen)
 find_package(OpenMP REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # generate config.h
 configure_file(config.h.in config.h)
@@ -81,11 +82,13 @@ target_link_libraries(bfe PUBLIC ${RELIC_LIBRARY})
 target_link_libraries(bfe PRIVATE m)
 target_include_directories(bfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
 target_link_libraries(bfe PRIVATE OpenMP::OpenMP_C)
+target_link_libraries(bfe PUBLIC OpenSSL::Crypto)
 
 target_link_libraries(bfe_static PUBLIC ${RELIC_LIBRARY})
 target_link_libraries(bfe_static PUBLIC m)
 target_include_directories(bfe_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
 target_link_libraries(bfe_static PUBLIC OpenMP::OpenMP_C)
+target_link_libraries(bfe_static PUBLIC OpenSSL::Crypto)
 
 install(TARGETS bfe
         EXPORT bfe-targets
