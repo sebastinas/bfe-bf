@@ -342,8 +342,8 @@ static int eddsa_sign(eddsa_sig_t* eddsa, vector_t* ciphertexts, eddsa_sk_t* edd
   hash_update_bbg_ciphertexts(&ctx, ciphertexts);
   hash_update_tbfe_public_key(&ctx, pk); // Add public key to hash
   Keccak_HashFinal(&ctx, NULL);
-  uint8_t hash_buf[MAX_ORDER_SIZE];
-  Keccak_HashSqueeze(&ctx, hash_buf, order_size * 8);
+  uint8_t hash_buf[64];
+  Keccak_HashSqueeze(&ctx, hash_buf, 64 * 8);
 
   EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
   if (!md_ctx) {
@@ -405,8 +405,8 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
   hash_update_bbg_ciphertexts(&ctx, ciphertexts);
   hash_update_tbfe_public_key(&ctx, pk); // Add public key to hash
   Keccak_HashFinal(&ctx, NULL);
-  uint8_t hash_buf[MAX_ORDER_SIZE];
-  Keccak_HashSqueeze(&ctx, hash_buf, order_size * 8);
+  uint8_t hash_buf[64];
+  Keccak_HashSqueeze(&ctx, hash_buf, 64 * 8);
 
   EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
   if (!md_ctx) {
