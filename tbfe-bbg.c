@@ -935,9 +935,7 @@ static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk) {
  */
 static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v) {
   v = htole32(v);
-  uint8_t buf[sizeof(v)];
-  memcpy(buf, &v, sizeof(v));
-  Keccak_HashUpdate(ctx, buf, sizeof(buf) * 8);
+  Keccak_HashUpdate(ctx, (const uint8_t*)&v, sizeof(v) * 8);
 }
 
 /**
