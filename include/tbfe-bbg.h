@@ -21,9 +21,10 @@ BFE_BEGIN_CDECL
  * @param[in] total_depth - total depth of the interval tree (e.g. tree height + 2)
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
- * 
+ *
  * @brief This function initializes all fields of the public key to a predefined value.
- *        The params field gets initialzed and the total_depth and num_max_delegatable_levels are set
+ *        The params field gets initialzed and the total_depth and num_max_delegatable_levels are
+ * set
  */
 BFE_VISIBLE int tbfe_bbg_init_public_key(tbfe_bbg_public_key_t* public_key,
                                          unsigned int total_depth);

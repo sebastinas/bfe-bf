@@ -1,26 +1,28 @@
 /*
  * This file contains the implementation of the TBFE scheme.
  * BBG HIBE is used for key delegation in a binary tree structure.
- * Forward secrecy is achieved by puncturing the secret key for specific ciphertexts (via bloom filter)
- * or after some time interval (via tree).
- * 
- * The implementation utilizes EVERY node (in the tree) as distinct time interval (not only the leaves).
- * Index-To-Identity mapping is done via indexing the nodes in a 'pre-order traversal' manner.
- * 
+ * Forward secrecy is achieved by puncturing the secret key for specific ciphertexts (via bloom
+ * filter) or after some time interval (via tree).
+ *
+ * The implementation utilizes EVERY node (in the tree) as distinct time interval (not only the
+ * leaves). Index-To-Identity mapping is done via indexing the nodes in a 'pre-order traversal'
+ * manner.
+ *
  * To achieche CCA security the CHK compiler is added as additional layer to the HIBE.
- * 
+ *
  */
 
 /*
- * The code contains different definitions of the tree height (or depth), which are explained here: 
+ * The code contains different definitions of the tree height (or depth), which are explained here:
  *  - max_delegatable_depth   : Number of levels for key delegation (includes bloom filter keys).
- *  - total_depth             : Height of the tree including bloom filter keys and CHK signature --> equal to 'max_delegatable_depth + 1'.
- * 
+ *  - total_depth             : Height of the tree including bloom filter keys and CHK signature -->
+ * equal to 'max_delegatable_depth + 1'.
+ *
  * Following definitions are used together with some specific identity ID at depth d.
- *  - num_delegatable_levels  : Number of levels for further key delegation of subtree with ID as root --> equal to 'total_depth - ID.depth'.
- *                              This variable refers to the number of b_i (basis) elements as part of some BBG secret key (cmp. BBG HIBE key generation).
+ *  - num_delegatable_levels  : Number of levels for further key delegation of subtree with ID as
+ * root --> equal to 'total_depth - ID.depth'. This variable refers to the number of b_i (basis)
+ * elements as part of some BBG secret key (cmp. BBG HIBE key generation).
  */
-
 
 #include "include/tbfe-bbg.h"
 
@@ -36,7 +38,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 // ##################################################
 // ##### ADDITIONAL STRUCTS AND DEFINES FOR BBG #####
 // ##################################################
@@ -48,25 +49,26 @@
 
 /**
  * Represents a BBG HIBE identity in the tree.
- * An identity is defined by the its depth in the tree and the corresponding 0/1 (left/right child) path from the root.
+ * An identity is defined by the its depth in the tree and the corresponding 0/1 (left/right child)
+ * path from the root.
  */
 typedef struct {
-  unsigned depth;                   /**< Depth of the identity or distance from root. */
-  unsigned* id;                     /**< Array which uniquely defines the identity as a path from root. */
+  unsigned depth; /**< Depth of the identity or distance from root. */
+  unsigned* id;   /**< Array which uniquely defines the identity as a path from root. */
 } bbg_identity_t;
 
 /**
  * Generated symmetric Key which is encapsulated and shared by this protocol.
  */
 typedef struct {
-  gt_t k;                           /**< The key is represented by a G_t group element. */
+  gt_t k; /**< The key is represented by a G_t group element. */
 } bbg_key_t;
 
 /**
  * Represents a BBG HIBE master key.
  */
 typedef struct {
-  g1_t mk;                          /**< The master key is represented by a G_1 group element. */
+  g1_t mk; /**< The master key is represented by a G_1 group element. */
 } bbg_master_key_t;
 
 /**
@@ -77,32 +79,32 @@ typedef struct {
  *    - b  = [h_k^r, ..., h_l^r]
  */
 typedef struct {
-  unsigned num_delegatable_levels;  /**< Number of elements in array b */
-  bbg_identity_t identity;          /**< Identity (or node of the tree) corresponding to the secret key */
-  g1_t a0;                          /**< a0 part of the secret key - G_1 element */
-  g2_t a1;                          /**< a1 part of the secret key - G_2 element */             
-  g1_t* b;                          /**< b_k to b_l of the secret key - G_1 elements*/
-  g1_t associated_id;               /**< This field stores the product (g_3 * h_1^I_1 * h_2^I_2 * ... * h_k^I_k) for further key delegation. */
+  unsigned num_delegatable_levels; /**< Number of elements in array b */
+  bbg_identity_t identity; /**< Identity (or node of the tree) corresponding to the secret key */
+  g1_t a0;                 /**< a0 part of the secret key - G_1 element */
+  g2_t a1;                 /**< a1 part of the secret key - G_2 element */
+  g1_t* b;                 /**< b_k to b_l of the secret key - G_1 elements*/
+  g1_t associated_id; /**< This field stores the product (g_3 * h_1^I_1 * h_2^I_2 * ... * h_k^I_k)
+                         for further key delegation. */
 } bbg_secret_key_t;
 
 /**
  * Ciphertext of BBG HIBE.
  * C = [a,b,c] where:
- *    - a = e(g_2, g_1)^s * M 
+ *    - a = e(g_2, g_1)^s * M
  *    - b = g^s
  *    - c =(h_1^I_1 * ... * h_k^I_k * g_3)^s
  */
 typedef struct {
-  gt_t a;                           /**< a part of the ciphertext - G_t element */
-  g2_t b;                           /**< b part of the ciphertext - G_2 element */
-  g1_t c;                           /**< c part of the ciphertext - G_1 element */
+  gt_t a; /**< a part of the ciphertext - G_t element */
+  g2_t b; /**< b part of the ciphertext - G_2 element */
+  g1_t c; /**< c part of the ciphertext - G_1 element */
 } bbg_ciphertext_t;
 
 /* Prefixes for hash function to achieve domain separation */
 static const uint8_t IDENTITY_PREFIX     = 2;
 static const uint8_t SIGNATURE_PREFIX    = 3;
 static const uint8_t VERIFICATION_PREFIX = 4;
-
 
 // ##################################################
 // ############## FUNCTION PROTOTYPES ###############
@@ -113,100 +115,124 @@ static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk);
 static void eddsa_clear_pk(eddsa_pk_t* eddsa_pk);
 static void eddsa_clear_sig(eddsa_sig_t* eddsa);
 static int eddsa_keygen(eddsa_sk_t* eddsa_sk, eddsa_pk_t* eddsa_pk);
-static int eddsa_sign (eddsa_sig_t* eddsa, vector_t * ciphertexts, eddsa_sk_t* eddsa_sk, tbfe_bbg_public_key_t* pk);
-static int eddsa_verify (vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* eddsa_pk, tbfe_bbg_public_key_t* pk);
+static int eddsa_sign(eddsa_sig_t* eddsa, vector_t* ciphertexts, eddsa_sk_t* eddsa_sk,
+                      tbfe_bbg_public_key_t* pk);
+static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* eddsa_pk,
+                        tbfe_bbg_public_key_t* pk);
 // ## SIZE
-static unsigned int bbg_get_identity_size (const bbg_identity_t * identity);
-static unsigned bbg_get_secret_key_size (const bbg_secret_key_t * secret_key);
-static unsigned bbg_get_public_params_size (const bbg_public_params_t * public_params);
+static unsigned int bbg_get_identity_size(const bbg_identity_t* identity);
+static unsigned bbg_get_secret_key_size(const bbg_secret_key_t* secret_key);
+static unsigned bbg_get_public_params_size(const bbg_public_params_t* public_params);
 // ## INIT
-static int bbg_init_identity (bbg_identity_t * identity,unsigned int id_depth);
-static int bbg_init_public_key (bbg_public_key_t * pk);
-static int bbg_init_secret_key (bbg_secret_key_t * sk,unsigned int delegetable_levels,unsigned int id_depth);
-static int bbg_init_ciphertext (bbg_ciphertext_t * ciphertext);
-static int bbg_init_public_params (bbg_public_params_t * params,unsigned int depth);
-static int bbg_init_public_params_from_serialized (bbg_public_params_t * params,const uint8_t * serialized);
-static int bbg_init_master_key (bbg_master_key_t * mk);
-static int bbg_init_key (bbg_key_t * key);
-static int bbg_init_identity_from (bbg_identity_t * dst,unsigned int depth,const bbg_identity_t * src);
+static int bbg_init_identity(bbg_identity_t* identity, unsigned int id_depth);
+static int bbg_init_public_key(bbg_public_key_t* pk);
+static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_levels,
+                               unsigned int id_depth);
+static int bbg_init_ciphertext(bbg_ciphertext_t* ciphertext);
+static int bbg_init_public_params(bbg_public_params_t* params, unsigned int depth);
+static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
+                                                  const uint8_t* serialized);
+static int bbg_init_master_key(bbg_master_key_t* mk);
+static int bbg_init_key(bbg_key_t* key);
+static int bbg_init_identity_from(bbg_identity_t* dst, unsigned int depth,
+                                  const bbg_identity_t* src);
 // ## SERIALIZE AND DESERIALIZE
-static void bbg_serialize_identity (uint8_t * dst,const bbg_identity_t * identity);
-static void bbg_serialize_public_key (uint8_t * serialized,bbg_public_key_t * public_key);
-static void bbg_serialize_secret_key (uint8_t * serialized,bbg_secret_key_t * secret_key);
-static void bbg_serialize_ciphertext (uint8_t * serialized,bbg_ciphertext_t * ciphertext);
-static void bbg_serialize_public_params (uint8_t * serialized,bbg_public_params_t * public_params);
-static void bbg_deserialize_identity (bbg_identity_t * identity,const uint8_t * src);
-static void bbg_deserialize_public_key (bbg_public_key_t * public_key,const uint8_t * serialized);
-static void bbg_deserialize_secret_key (bbg_secret_key_t * secret_key,const uint8_t * serialized);
-static void bbg_deserialize_ciphertext (bbg_ciphertext_t * ciphertext,const uint8_t * serialized);
+static void bbg_serialize_identity(uint8_t* dst, const bbg_identity_t* identity);
+static void bbg_serialize_public_key(uint8_t* serialized, bbg_public_key_t* public_key);
+static void bbg_serialize_secret_key(uint8_t* serialized, bbg_secret_key_t* secret_key);
+static void bbg_serialize_ciphertext(uint8_t* serialized, bbg_ciphertext_t* ciphertext);
+static void bbg_serialize_public_params(uint8_t* serialized, bbg_public_params_t* public_params);
+static void bbg_deserialize_identity(bbg_identity_t* identity, const uint8_t* src);
+static void bbg_deserialize_public_key(bbg_public_key_t* public_key, const uint8_t* serialized);
+static void bbg_deserialize_secret_key(bbg_secret_key_t* secret_key, const uint8_t* serialized);
+static void bbg_deserialize_ciphertext(bbg_ciphertext_t* ciphertext, const uint8_t* serialized);
 // ## CLEAR AND FREE
-static void bbg_clear_identity (bbg_identity_t * identity);
-static void bbg_clear_public_key (bbg_public_key_t * pk);
-static void bbg_clear_secret_key (bbg_secret_key_t * sk);
-static void bbg_clear_ciphertext (bbg_ciphertext_t * ciphertext);
-static void bbg_clear_public_params (bbg_public_params_t * params);
-static void bbg_clear_master_key (bbg_master_key_t * mk);
-static void bbg_clear_key (bbg_key_t * key);
+static void bbg_clear_identity(bbg_identity_t* identity);
+static void bbg_clear_public_key(bbg_public_key_t* pk);
+static void bbg_clear_secret_key(bbg_secret_key_t* sk);
+static void bbg_clear_ciphertext(bbg_ciphertext_t* ciphertext);
+static void bbg_clear_public_params(bbg_public_params_t* params);
+static void bbg_clear_master_key(bbg_master_key_t* mk);
+static void bbg_clear_key(bbg_key_t* key);
 // ## HASHING
-static void bbg_hash_id (bn_t hashed_id,const unsigned id,const unsigned prefix);
+static void bbg_hash_id(bn_t hashed_id, const unsigned id, const unsigned prefix);
 static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk);
 static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v);
 static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
                                         tbfe_bbg_public_key_t* public_key);
-static void hash_update_bbg_ciphertext (Keccak_HashInstance * ctx,bbg_ciphertext_t * ciphertext);
-static void hash_update_bbg_ciphertexts (Keccak_HashInstance * ctx,vector_t * ciphertexts);
+static void hash_update_bbg_ciphertext(Keccak_HashInstance* ctx, bbg_ciphertext_t* ciphertext);
+static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciphertexts);
 // ## BBG HIBE
-static int bbg_convert_identity_to_zp_vector (bn_t * identity_zp_vector,const bbg_identity_t * identity);
-static int bbg_setup (bbg_master_key_t * master_key,bbg_public_key_t * public_key,bbg_public_params_t * public_params,const unsigned total_depth);
-static int bbg_decapsulate (bbg_key_t * key,bbg_ciphertext_t * ciphertext,bbg_secret_key_t * secret_key,eddsa_pk_t* eddsa_pk,bbg_public_params_t * public_params,const bbg_identity_t * identity);
-static int bbg_encapsulate (bbg_ciphertext_t * ciphertext,gt_t message,bbg_public_key_t * public_key,eddsa_pk_t* eddsa_pk,bbg_public_params_t * public_params,const bbg_identity_t * identity);
-static int bbg_copy_identity (bbg_identity_t * dest,const bbg_identity_t * src);
-static bool bbg_identities_are_equal (const bbg_identity_t * l,const bbg_identity_t * r);
-static int bbg_sample_key (bbg_key_t * key);
-static int bbg_key_generation_from_master_key (bbg_secret_key_t * secret_key,bbg_master_key_t * master_key,const bbg_identity_t * identity,bbg_public_params_t * public_params);
-static int bbg_key_generation_from_parent (bbg_secret_key_t * secret_key,bbg_secret_key_t * parent_secret_key,const bbg_identity_t * identity,bbg_public_params_t * public_params);
-static int bbg_convert_key_to_bit_string (uint8_t * bit_string,bbg_key_t * key);
+static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
+                                             const bbg_identity_t* identity);
+static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
+                     bbg_public_params_t* public_params, const unsigned total_depth);
+static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
+                           bbg_secret_key_t* secret_key, eddsa_pk_t* eddsa_pk,
+                           bbg_public_params_t* public_params, const bbg_identity_t* identity);
+static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_public_key_t* public_key,
+                           eddsa_pk_t* eddsa_pk, bbg_public_params_t* public_params,
+                           const bbg_identity_t* identity);
+static int bbg_copy_identity(bbg_identity_t* dest, const bbg_identity_t* src);
+static bool bbg_identities_are_equal(const bbg_identity_t* l, const bbg_identity_t* r);
+static int bbg_sample_key(bbg_key_t* key);
+static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
+                                              bbg_master_key_t* master_key,
+                                              const bbg_identity_t* identity,
+                                              bbg_public_params_t* public_params);
+static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
+                                          bbg_secret_key_t* parent_secret_key,
+                                          const bbg_identity_t* identity,
+                                          bbg_public_params_t* public_params);
+static int bbg_convert_key_to_bit_string(uint8_t* bit_string, bbg_key_t* key);
 // ## TBFE
-// ### Commented function define the public TBFE interface and are already declared in './include/tbfe-bbg.h'
-// int tbfe_bbg_init_public_key (tbfe_bbg_public_key_t * public_key,unsigned int total_depth);
-// int tbfe_bbg_public_key_deserialize (tbfe_bbg_public_key_t * public_key,const uint8_t * src);
-// void tbfe_bbg_clear_public_key (tbfe_bbg_public_key_t * public_key);
-// int tbfe_bbg_init_secret_key (tbfe_bbg_secret_key_t * secret_key,unsigned int bloom_filter_size,double false_positive_prob);
-// int tbfe_bbg_secret_key_deserialize (tbfe_bbg_secret_key_t * secret_key,const uint8_t * src);
-static void tbfe_bbg_vector_secret_key_free (vector_t * vector_secret_key);
+// ### Commented function define the public TBFE interface and are already declared in
+// './include/tbfe-bbg.h' int tbfe_bbg_init_public_key (tbfe_bbg_public_key_t * public_key,unsigned
+// int total_depth); int tbfe_bbg_public_key_deserialize (tbfe_bbg_public_key_t * public_key,const
+// uint8_t * src); void tbfe_bbg_clear_public_key (tbfe_bbg_public_key_t * public_key); int
+// tbfe_bbg_init_secret_key (tbfe_bbg_secret_key_t * secret_key,unsigned int
+// bloom_filter_size,double false_positive_prob); int tbfe_bbg_secret_key_deserialize
+// (tbfe_bbg_secret_key_t * secret_key,const uint8_t * src);
+static void tbfe_bbg_vector_secret_key_free(vector_t* vector_secret_key);
 // void tbfe_bbg_clear_secret_key (tbfe_bbg_secret_key_t * secret_key);
 // int tbfe_bbg_init_ciphertext (tbfe_bbg_ciphertext_t * ciphertext);
 // int tbfe_bbg_ciphertext_deserialize (tbfe_bbg_ciphertext_t * ciphertext,const uint8_t * src);
 // void tbfe_bbg_clear_ciphertext (tbfe_bbg_ciphertext_t * ciphertext);
-static unsigned long compute_tree_size (const unsigned h);
-static int tbfe_bbg_index_to_identity (bbg_identity_t * identity,const unsigned long index,const unsigned height);
+static unsigned long compute_tree_size(const unsigned h);
+static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned long index,
+                                      const unsigned height);
 // void tbfe_bbg_public_key_serialize (uint8_t * serialized,tbfe_bbg_public_key_t * public_key);
 // void tbfe_bbg_secret_key_serialize (uint8_t * serialized,tbfe_bbg_secret_key_t * secret_key);
 // void tbfe_bbg_ciphertext_serialize (uint8_t * serialized,tbfe_bbg_ciphertext_t * ciphertext);
 // unsigned tbfe_bbg_public_key_size (const tbfe_bbg_public_key_t * public_key);
 // unsigned tbfe_bbg_secret_key_size (const tbfe_bbg_secret_key_t * secret_key);
 // unsigned tbfe_bbg_ciphertext_size (const tbfe_bbg_ciphertext_t * ciphertext);
-static int generate_zero_identity_with_last_component (bbg_identity_t * identity,unsigned int depth,unsigned int last_component);
-static int derive_key_and_add (vector_t * dst,bbg_public_params_t * params,bbg_master_key_t * msk,const bbg_identity_t * identity,unsigned int total_depth);
+static int generate_zero_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
+                                                      unsigned int last_component);
+static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
+                              const bbg_identity_t* identity, unsigned int total_depth);
 // int tbfe_bbg_keygen (tbfe_bbg_public_key_t * public_key,tbfe_bbg_secret_key_t * secret_key);
-// int tbfe_bbg_encaps (uint8_t * key,tbfe_bbg_ciphertext_t * ciphertext,tbfe_bbg_public_key_t * public_key,unsigned int time_interval);
-// int tbfe_bbg_decaps (uint8_t * key,tbfe_bbg_ciphertext_t * ciphertext,tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_public_key_t * public_key);
-// int tbfe_bbg_puncture_ciphertext (tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_ciphertext_t * ciphertext);
-static int puncture_derive_key_and_add (vector_t * dst,bbg_public_params_t * params,bbg_secret_key_t * sk,const bbg_identity_t * identity);
-// int tbfe_bbg_puncture_interval (tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_public_key_t * public_key,unsigned int time_interval);
+// int tbfe_bbg_encaps (uint8_t * key,tbfe_bbg_ciphertext_t * ciphertext,tbfe_bbg_public_key_t *
+// public_key,unsigned int time_interval); int tbfe_bbg_decaps (uint8_t * key,tbfe_bbg_ciphertext_t
+// * ciphertext,tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_public_key_t * public_key); int
+// tbfe_bbg_puncture_ciphertext (tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_ciphertext_t *
+// ciphertext);
+static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* params,
+                                       bbg_secret_key_t* sk, const bbg_identity_t* identity);
+// int tbfe_bbg_puncture_interval (tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_public_key_t *
+// public_key,unsigned int time_interval);
 
 // ## COMPARE
 #if defined(BFE_STATIC)
-static bool bbg_public_keys_are_equal (bbg_public_key_t * l,bbg_public_key_t * r);
-static bool bbg_public_params_are_equal (bbg_public_params_t * l,bbg_public_params_t * r);
-static bool bbg_secret_keys_are_equal (bbg_secret_key_t * l,bbg_secret_key_t * r);
-static bool bbg_ciphertexts_are_equal (bbg_ciphertext_t * l,bbg_ciphertext_t * r);
-bool tbfe_bbg_public_keys_are_equal (tbfe_bbg_public_key_t * l,tbfe_bbg_public_key_t * r);
-bool tbfe_bbg_secret_keys_are_equal (tbfe_bbg_secret_key_t * l,tbfe_bbg_secret_key_t * r);
-bool tbfe_bbg_ciphertexts_are_equal (tbfe_bbg_ciphertext_t * l,tbfe_bbg_ciphertext_t * r);
+static bool bbg_public_keys_are_equal(bbg_public_key_t* l, bbg_public_key_t* r);
+static bool bbg_public_params_are_equal(bbg_public_params_t* l, bbg_public_params_t* r);
+static bool bbg_secret_keys_are_equal(bbg_secret_key_t* l, bbg_secret_key_t* r);
+static bool bbg_ciphertexts_are_equal(bbg_ciphertext_t* l, bbg_ciphertext_t* r);
+bool tbfe_bbg_public_keys_are_equal(tbfe_bbg_public_key_t* l, tbfe_bbg_public_key_t* r);
+bool tbfe_bbg_secret_keys_are_equal(tbfe_bbg_secret_key_t* l, tbfe_bbg_secret_key_t* r);
+bool tbfe_bbg_ciphertexts_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_t* r);
 bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_t* r);
 #endif
-
 
 // ##################################################
 // ############## FUNCTION DEFINITIONS ##############
@@ -214,10 +240,10 @@ bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_
 
 /* >> OpenSSL EdDSA Signatures << */
 /**
- * The following functions provide the interface to create and verify 
+ * The following functions provide the interface to create and verify
  * signatures with EdDSA.
  */
-///@{ 
+///@{
 
 static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk) {
   if (eddsa_sk) {
@@ -225,14 +251,14 @@ static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk) {
   }
 }
 
-static void eddsa_clear_pk(eddsa_pk_t* eddsa_pk){
-  if(eddsa_pk){
-     memset(eddsa_pk->key, 0, Ed25519_KEY_BYTES);
+static void eddsa_clear_pk(eddsa_pk_t* eddsa_pk) {
+  if (eddsa_pk) {
+    memset(eddsa_pk->key, 0, Ed25519_KEY_BYTES);
   }
 }
 
-static void eddsa_clear_sig(eddsa_sig_t* eddsa){
-  if(eddsa){
+static void eddsa_clear_sig(eddsa_sig_t* eddsa) {
+  if (eddsa) {
     memset(eddsa->sig, 0, Ed25519_SIG_BYTES);
   }
 }
@@ -240,29 +266,30 @@ static void eddsa_clear_sig(eddsa_sig_t* eddsa){
 /**
  * Generates a new EdDSA key pair.
  * The keys are returned in RAW binary format.
- * 
+ *
  * @param eddsa_sk[out] - the generated secret signature key
  * @param eddsa_pk[out] - the generated public verification key
- * 
+ *
  * @return - BFE_SUCCESS when no errors occured, BFE_ERROR otherwise
  */
-static int eddsa_keygen(eddsa_sk_t* eddsa_sk, eddsa_pk_t* eddsa_pk){
+static int eddsa_keygen(eddsa_sk_t* eddsa_sk, eddsa_pk_t* eddsa_pk) {
 
   if (!eddsa_pk || !eddsa_sk)
-    return BFE_ERROR_INVALID_PARAM; 
+    return BFE_ERROR_INVALID_PARAM;
 
   int result_status = BFE_SUCCESS;
-  
-  EVP_PKEY *pkey = NULL; // Generate new KeyPair
-	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
-  if(!pctx) return BFE_ERROR;
-  
-	if (EVP_PKEY_keygen_init(pctx) <= 0){
+
+  EVP_PKEY* pkey     = NULL; // Generate new KeyPair
+  EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
+  if (!pctx)
+    return BFE_ERROR;
+
+  if (EVP_PKEY_keygen_init(pctx) <= 0) {
     result_status = BFE_ERROR;
     goto clean;
   }
-  
-	if (EVP_PKEY_keygen(pctx, &pkey) <= 0){
+
+  if (EVP_PKEY_keygen(pctx, &pkey) <= 0) {
     result_status = BFE_ERROR;
     goto clean;
   }
@@ -270,14 +297,14 @@ static int eddsa_keygen(eddsa_sk_t* eddsa_sk, eddsa_pk_t* eddsa_pk){
   size_t key_len = Ed25519_KEY_BYTES;
   // Extract raw public key
   if (EVP_PKEY_get_raw_public_key(pkey, eddsa_pk->key, &key_len) == EVP_FAILURE ||
-      key_len != Ed25519_KEY_BYTES){
+      key_len != Ed25519_KEY_BYTES) {
     result_status = BFE_ERROR;
     goto clean;
   }
 
   // Extract raw private key
   if (EVP_PKEY_get_raw_private_key(pkey, eddsa_sk->key, &key_len) == EVP_FAILURE ||
-        key_len != Ed25519_KEY_BYTES){
+      key_len != Ed25519_KEY_BYTES) {
     result_status = BFE_ERROR;
   }
 
@@ -291,20 +318,21 @@ clean:
 /**
  * Sign the given ciphertext vector together with the corresponding tbfe public key.
  * The public key is serialized and hashed together with the ciphertext.
- * 
+ *
  * @param[out] eddsa      - the generated signature
  * @param[in] ciphertexts - the given ciphertexts that shall be signed
  * @param[in] eddsa_sk    - the secret verification key
  * @param[in] pk          - the corresponding tbfe public key used to generate the ciphertexts
- * 
+ *
  * @return - BFE_SUCCESS if no error occured, BFE_ERROR otherwise
  */
-static int eddsa_sign(eddsa_sig_t* eddsa, vector_t * ciphertexts, eddsa_sk_t* eddsa_sk, tbfe_bbg_public_key_t* pk){
- 
-  if(!eddsa || !ciphertexts || !eddsa_sk || !pk){
+static int eddsa_sign(eddsa_sig_t* eddsa, vector_t* ciphertexts, eddsa_sk_t* eddsa_sk,
+                      tbfe_bbg_public_key_t* pk) {
+
+  if (!eddsa || !ciphertexts || !eddsa_sk || !pk) {
     return BFE_ERROR_INVALID_PARAM;
   }
- 
+
   int result_status = BFE_SUCCESS;
 
   // Hash (ciphertexts || pk)
@@ -317,52 +345,54 @@ static int eddsa_sign(eddsa_sig_t* eddsa, vector_t * ciphertexts, eddsa_sk_t* ed
   uint8_t hash_buf[MAX_ORDER_SIZE];
   Keccak_HashSqueeze(&ctx, hash_buf, order_size * 8);
 
-  EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
-  if(!md_ctx){
+  EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+  if (!md_ctx) {
     return BFE_ERROR;
   }
 
   // Create a EVP_PKEY data element from the raw private key information
-  EVP_PKEY* pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, eddsa_sk->key, Ed25519_KEY_BYTES);
-  if(!pkey) {
+  EVP_PKEY* pkey =
+      EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, eddsa_sk->key, Ed25519_KEY_BYTES);
+  if (!pkey) {
     result_status = BFE_ERROR;
     goto clean;
   }
 
   // Setup the signature
-	if(EVP_DigestSignInit(md_ctx, NULL, NULL, NULL, pkey) == EVP_FAILURE){
+  if (EVP_DigestSignInit(md_ctx, NULL, NULL, NULL, pkey) == EVP_FAILURE) {
     result_status = BFE_ERROR;
     goto clean;
   }
 
   // Sign hash
   size_t sig_len = Ed25519_SIG_BYTES;
-	int evp_status = EVP_DigestSign(md_ctx, eddsa->sig, &sig_len, hash_buf, order_size);
+  int evp_status = EVP_DigestSign(md_ctx, eddsa->sig, &sig_len, hash_buf, order_size);
 
-  if(evp_status == EVP_FAILURE || sig_len != Ed25519_SIG_BYTES){
+  if (evp_status == EVP_FAILURE || sig_len != Ed25519_SIG_BYTES) {
     result_status = BFE_ERROR;
   }
 
 clean:
   EVP_PKEY_free(pkey);
-	EVP_MD_CTX_free(md_ctx);
-  
+  EVP_MD_CTX_free(md_ctx);
+
   return result_status;
 }
 
 /**
  * Verifies the given EdDSA signature.
- * 
+ *
  * @param[in] ciphertexts - the ciphertext vector which was signed
  * @param[in] eddsa       - the corresponding signature
  * @param[in] eddsa_pk    - the public verification key
  * @param[in] pk          - the tbfe public key used to generate the ciphertexts
- * 
+ *
  * @return - BFE_SUCCESS if the signature could be verified, BFE_ERROR otherwise
  */
-static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* eddsa_pk, tbfe_bbg_public_key_t* pk){
-  
-  if(!ciphertexts || !eddsa || !eddsa_pk || !pk){
+static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* eddsa_pk,
+                        tbfe_bbg_public_key_t* pk) {
+
+  if (!ciphertexts || !eddsa || !eddsa_pk || !pk) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -377,46 +407,46 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
   Keccak_HashFinal(&ctx, NULL);
   uint8_t hash_buf[MAX_ORDER_SIZE];
   Keccak_HashSqueeze(&ctx, hash_buf, order_size * 8);
-  
-  EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
-  if(!md_ctx){
+
+  EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+  if (!md_ctx) {
     return BFE_ERROR;
   }
 
-
   // Create a EVP_PKEY data element from the raw public key information
-  EVP_PKEY* pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, eddsa_pk->key, Ed25519_KEY_BYTES);
-  if(!pkey) {
+  EVP_PKEY* pkey =
+      EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, eddsa_pk->key, Ed25519_KEY_BYTES);
+  if (!pkey) {
     result_status = BFE_ERROR;
     goto clean;
   }
 
   // Setup verification
-	if(EVP_DigestVerifyInit(md_ctx, NULL, NULL, NULL, pkey) == EVP_FAILURE){
+  if (EVP_DigestVerifyInit(md_ctx, NULL, NULL, NULL, pkey) == EVP_FAILURE) {
     result_status = BFE_ERROR;
     goto clean;
   }
-	
-	if(EVP_DigestVerify(md_ctx, eddsa->sig, Ed25519_SIG_BYTES, hash_buf, order_size) == EVP_FAILURE){
+
+  if (EVP_DigestVerify(md_ctx, eddsa->sig, Ed25519_SIG_BYTES, hash_buf, order_size) ==
+      EVP_FAILURE) {
     result_status = BFE_ERROR;
   }
 
 clean:
   EVP_PKEY_free(pkey);
-	EVP_MD_CTX_free(md_ctx);
+  EVP_MD_CTX_free(md_ctx);
 
   return result_status;
 }
 
 ///@}
 
-
 /* >> SIZE << */
 /**
  * Return the size in bytes of the given element.
  * This function are defined for 'bbg_identity_t', 'bbg_secret_key_t' and 'bbg_public_params_t'.
  */
-///@{ 
+///@{
 
 static unsigned int bbg_get_identity_size(const bbg_identity_t* identity) {
   return (identity->depth + 1) * sizeof(uint32_t);
@@ -434,25 +464,24 @@ static unsigned bbg_get_public_params_size(const bbg_public_params_t* public_par
 }
 ///@}
 
-
 /* >> INIT << */
 /**
- * The following functions initialize (already allocted - either heap or stack) structures with initial values.
- * Some structures use RELIC specific datatypes (e.g. bn_t, gt_t, ...), which are also
- * created and defined in this functions. 
+ * The following functions initialize (already allocted - either heap or stack) structures with
+ * initial values. Some structures use RELIC specific datatypes (e.g. bn_t, gt_t, ...), which are
+ * also created and defined in this functions.
  */
-///@{ 
+///@{
 
 /**
  * Initializes the given identity with the provided depth
- * 
+ *
  * @param[out] identity - already allocated identity element which shall be initialized
  * @param[in] id_depth  - depth of the newly initialized identity
- * 
+ *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
 static int bbg_init_identity(bbg_identity_t* identity, unsigned int id_depth) {
-  if (!identity) {  // Only consider valid pointer
+  if (!identity) { // Only consider valid pointer
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -483,11 +512,12 @@ static int bbg_init_public_key(bbg_public_key_t* pk) {
 
 /**
  * Initializes the given BBG secret key.
- * 
+ *
  * @param[out] sk                 - initialized secret key
- * @param[in] delegetable_levels  - number of delegetable levels of the corresponding identity (defines key size)
+ * @param[in] delegetable_levels  - number of delegetable levels of the corresponding identity
+ * (defines key size)
  * @param[in] id_depth            - depth of the corresponding identity
- * 
+ *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
 static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_levels,
@@ -680,13 +710,12 @@ static int bbg_init_identity_from(bbg_identity_t* dst, unsigned int depth,
 }
 ///@}
 
-
 /* >> SERIALIZE AND DESERIALIZE << */
 /**
  * The following functions provides primitives to write (serialize) or
  * read (deserialize) structures to/from memory in a predefined order.
  */
-///@{ 
+///@{
 
 static void bbg_serialize_identity(uint8_t* dst, const bbg_identity_t* identity) {
   write_u32(&dst, identity->depth);
@@ -770,13 +799,12 @@ static void bbg_deserialize_ciphertext(bbg_ciphertext_t* ciphertext, const uint8
 }
 ///@}
 
-
 /* >> CLEAR AND FREE << */
 /**
  * The following functions safely clear unsued strcutures.
  * Senstive data is overwritten and subsequently the memory is freed.
  */
-///@{ 
+///@{
 
 static void bbg_clear_identity(bbg_identity_t* identity) {
   if (identity) {
@@ -859,14 +887,13 @@ static void bbg_clear_key(bbg_key_t* key) {
 }
 ///@}
 
-
 /* >> HASHING << */
 /**
  * The following functions provide an interface to hash different kinds of data and
  * combine multpile data items into a single hash.
  * To create domain separation different prefixes shall be used for different data.
  */
-///@{ 
+///@{
 
 /**
  * This function generates the hash of some unsigned integer.
@@ -886,18 +913,18 @@ static void bbg_hash_id(bn_t hashed_id, const unsigned id, const unsigned prefix
 
 /**
  * Generates the SHA3 hash of the public key of the given EdDSA key pair
- * 
+ *
  * @param[out] hash     - generated hash
  * @param[in] eddsa_pk  - EdDSA public key
  * @param[in] prefix    - prefix used for hashing
  */
-static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk){
-    Keccak_HashInstance ctx;
-    Keccak_HashInitialize_SHAKE256(&ctx);
-    Keccak_HashUpdate(&ctx, &VERIFICATION_PREFIX, sizeof(VERIFICATION_PREFIX) * 8);
-    Keccak_HashUpdate(&ctx, eddsa_pk->key, Ed25519_KEY_BYTES * 8);
-    Keccak_HashFinal(&ctx, NULL);
-    hash_squeeze_zp(hash, &ctx);
+static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk) {
+  Keccak_HashInstance ctx;
+  Keccak_HashInitialize_SHAKE256(&ctx);
+  Keccak_HashUpdate(&ctx, &VERIFICATION_PREFIX, sizeof(VERIFICATION_PREFIX) * 8);
+  Keccak_HashUpdate(&ctx, eddsa_pk->key, Ed25519_KEY_BYTES * 8);
+  Keccak_HashFinal(&ctx, NULL);
+  hash_squeeze_zp(hash, &ctx);
 }
 
 /**
@@ -940,7 +967,7 @@ static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
 
 /**
  * Generates the hash of the given BBG ciphertext c = [a,b,c]
- * 
+ *
  * @param[out] ctx        - hash instance
  * @param[in] ciphertext  - input bbg ciphertext to be hashed
  */
@@ -952,7 +979,7 @@ static void hash_update_bbg_ciphertext(Keccak_HashInstance* ctx, bbg_ciphertext_
 
 /**
  * Generates the hash of an vector of BBG ciphertexts
- * 
+ *
  * @param[out] ctx        - hash instance
  * @param[in] ciphertexts - input vector conatining multiple bbg ciphertexts
  */
@@ -960,27 +987,26 @@ static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciph
   const unsigned int count = vector_size(ciphertexts);
   for (size_t i = 0; i < count; ++i) {
     // Apply hash function on every ciphertext and add it to old hash
-    hash_update_bbg_ciphertext(ctx, vector_get(ciphertexts, i));  
+    hash_update_bbg_ciphertext(ctx, vector_get(ciphertexts, i));
   }
 }
 ///@}
-
 
 /* >> BBG HIBE << */
 /**
  * The following functions provide the interface to the BBG HIBE scheme,
  * as well as some utility functions.
  */
-///@{ 
+///@{
 
 /**
  * Converts an identity element into a vector of Zp elements,
  * by hashing every element of the idenitity-path (from root to ID).
- * 
+ *
  * @param[out] identity_zp_vector - output vector of Zp elements
  * @param[in] identity            - identity element to be converted
- * 
- * @return BFE_SUCESS if no errors occur, an error code otherwise 
+ *
+ * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
                                              const bbg_identity_t* identity) {
@@ -1005,23 +1031,23 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
 
 /**
  * Implements the BBG HIBE setup function.
- * Parameters g, g_hat, g_2, g_3, h_1, ..., h_l are randomly generated group elements (where l = total_depth).
- * Alpha is random in Zp and g_1 = g_hat^alpha.
- * The master key is set to g_2^alpha.
+ * Parameters g, g_hat, g_2, g_3, h_1, ..., h_l are randomly generated group elements (where l =
+ * total_depth). Alpha is random in Zp and g_1 = g_hat^alpha. The master key is set to g_2^alpha.
  * The public key is set to e(g_2, g_1), where e is a bilinear function.
- * 
+ *
  * @param[out] master_key     - generated master key used for key derivation
  * @param[out] public_key     - generated public key
  * @param[out] public_params  - generated public parameter set
- * @param[in] total_depth     - the total depth of the interval tree (includes two layers for bloom filter keys and CHK signature)
+ * @param[in] total_depth     - the total depth of the interval tree (includes two layers for bloom
+ * filter keys and CHK signature)
  *
- * @return BFE_SUCESS if no errors occur, an error code otherwise 
+ * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
                      bbg_public_params_t* public_params, const unsigned total_depth) {
   int result_status = BFE_SUCCESS;
 
-  // Create new group elements and initialize those 
+  // Create new group elements and initialize those
   g2_t original_public_key_pk;
   g2_null(original_public_key_pk);
 
@@ -1031,7 +1057,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
   RLC_TRY {
     g2_new(original_public_key_pk);
     bn_new(alpha);
-    
+
     // Randomize public parameters
     g1_rand(public_params->g);
     g2_rand(public_params->g_hat);
@@ -1053,7 +1079,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
     pc_map(public_key->pk, public_params->g2, original_public_key_pk);
     // Master key mk = g_2^alpha
     g1_mul(master_key->mk, public_params->g2, alpha);
-    
+
     public_params->max_delegatable_depth = total_depth - 1;
   }
   // Clean up if errors occured
@@ -1070,14 +1096,15 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
 
 /**
  * Encapsulates a newly generated Key with the BBG HIBE scheme.
- * 
+ *
  * @param[out] ciphertext     - the generated ciphertext
- * @param[out] message        - the freshly generated plaintext message (in this case a symetric key)
+ * @param[out] message        - the freshly generated plaintext message (in this case a symetric
+ * key)
  * @param[in] public_key      - the public key used for encapsulation
  * @param[in] eddsa_pk        - the public EdDSA key
  * @param[in] public_params   - public parameter set of the BBG HIBE
  * @param[in] identity        - the identity for which the message shall be encrypted
- * 
+ *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise
  */
 static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_public_key_t* public_key,
@@ -1099,7 +1126,6 @@ static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_publi
   RLC_TRY {
     bn_new(u);
     g1_new(tmp);
-
 
     // u = H(VERIFICATION_PREFIX | eddsa_pk) --> generate hash of eddsa public key for CHK signature
     bbg_hash_eddsa_pk(u, eddsa_pk);
@@ -1129,7 +1155,6 @@ static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_publi
     g2_mul(ciphertext->b, public_params->g_hat, u);
     // ## c = c^u
     g1_mul(ciphertext->c, ciphertext->c, u);
-
   }
   RLC_CATCH_ANY {
     result_status = BFE_ERROR;
@@ -1149,14 +1174,14 @@ clean:
 
 /**
  * Decapsulates a given encapsulated secret from an BBG HIBE ciphertext.
- * 
+ *
  * @param[out] key            - the received decapsulated key (or the secret)
  * @param[in] ciphertext      - the given BBG ciphertext which shall be decapsulated
  * @param[in] secret_key      - the secret key used to decapsulate the ciphertext
  * @param[in] eddsa_pk        - the EdDSA public key
  * @param[in] public_params   - public parameter set of the BBG HIBE
  * @param[in] identity        - identity for which the message was encapsulated
- * 
+ *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise
  */
 static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
@@ -1192,7 +1217,8 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
     g2_new(g2s[0]);
     g2_new(g2s[1]);
 
-    // u = H(VERIFICATION_PREFIX | eddsa_pk) --> generate hash of eddsa public key to verify CHK signature
+    // u = H(VERIFICATION_PREFIX | eddsa_pk) --> generate hash of eddsa public key to verify CHK
+    // signature
     bbg_hash_eddsa_pk(u, eddsa_pk);
 
     // Choose a random w from Z_p^*.
@@ -1205,10 +1231,10 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
                  identity_zp_vector[i]);
       g1_add(g1s[0], g1s[0], g1s[1]);
     }
-    //g1_copy(g1s[0], secret_key->associated_id); // --> also possible instead of for-loop
+    // g1_copy(g1s[0], secret_key->associated_id); // --> also possible instead of for-loop
 
     // ## generate new sk for identity eddsa_pk (CHK)
-    // g1s[0] = g1s[0] * h_{k+1}^u 
+    // g1s[0] = g1s[0] * h_{k+1}^u
     g1_mul_fix(g1s[1], &public_params->h_precomputation_tables[identity->depth * RLC_EP_TABLE], u);
     g1_add(g1s[0], g1s[0], g1s[1]);
 
@@ -1252,7 +1278,7 @@ clear:
 /**
  * Copy an identity element to another one.
  * Depth of both identities has to be euqal.
- * 
+ *
  * @param [out] dest  - allocated identity struct pointer, to which shall be copied
  * @param [in] src    - identity which shall be copied
  */
@@ -1268,16 +1294,15 @@ static int bbg_copy_identity(bbg_identity_t* dest, const bbg_identity_t* src) {
 /**
  * Checks if two identities are equal.
  * E.g. they have the same depth and the path to root is equal.
- * 
+ *
  * @param[in] l - left identity
  * @param[in] r - rigth identity
- * 
+ *
  * @return True if both identities are equal and False otherwise
  */
 static bool bbg_identities_are_equal(const bbg_identity_t* l, const bbg_identity_t* r) {
   return l->depth == r->depth && memcmp(l->id, r->id, sizeof(l->id[0]) * l->depth) == 0;
 }
-
 
 static int bbg_sample_key(bbg_key_t* key) {
   if (!key) {
@@ -1294,21 +1319,21 @@ static int bbg_sample_key(bbg_key_t* key) {
   return ret;
 }
 
-
 /**
  * Derive some secret key for a specific identity directly from the master key.
- * The function follows the steps of the BBG HIBE key generation (where k is the depth of the identity and
- * l is total depth of the tree):
+ * The function follows the steps of the BBG HIBE key generation (where k is the depth of the
+ * identity and l is total depth of the tree):
  *  - [in] public_params = [g, g_1, g_2, g_3, h_1, ..., h_l]
  *  - [in] master_key mk = g2^alpha
- *  - [out] secret_key = [mk*(h_1^I_1 * ... * h_k^I_k * g_3)^r, g^r, h_{k+1}^r, ..., h_l^r] = [a_0, a_1, b_{k+1}, ..., b_l]
- * 
+ *  - [out] secret_key = [mk*(h_1^I_1 * ... * h_k^I_k * g_3)^r, g^r, h_{k+1}^r, ..., h_l^r] = [a_0,
+ * a_1, b_{k+1}, ..., b_l]
+ *
  * @param[out] secret_key   - generated secret key, which is derived from the master key
  * @param[in] master_key    - master key from BBG setup
  * @param[in] identity      - the identity for which a secret key shall be generated
  * @param[in] public_params - public parameter set of the BBG setup
- * 
- * @return BFE_SUCESS if no errors occur, an error code otherwise 
+ *
+ * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
                                               bbg_master_key_t* master_key,
@@ -1334,7 +1359,8 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     bn_new(v);
 
     // Identity has to be converted into an zp vector (e.g. like a hash function).
-    // identity_zp_vector = {i=1 to k} h_i^{H(0||I_i) -> hashed identity, where I_i = identity->id[i]
+    // identity_zp_vector = {i=1 to k} h_i^{H(0||I_i) -> hashed identity, where I_i =
+    // identity->id[i]
     bbg_convert_identity_to_zp_vector(identity_zp_vector, identity);
 
     // Choose a random v from Z_p^*.
@@ -1342,7 +1368,8 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
 
     // ### Calculate sk = [a_0, a_1, b_{k+1}, ..., b_l]
     // ## a_0 = mk * (prod_{i=1 to k} h_i^{H(0||I_i)} * g_3)^v.
-    // 1.) associated_id = (prod_{i=1 to k} h_i^{H(0||I_i)} * g_3) --> keep this product for further key delegations
+    // 1.) associated_id = (prod_{i=1 to k} h_i^{H(0||I_i)} * g_3) --> keep this product for further
+    // key delegations
     g1_copy(secret_key->associated_id, public_params->g3);
     for (size_t i = 0; i < identity->depth; ++i) {
       g1_mul_fix(h_i_to_the_identity_i, &public_params->h_precomputation_tables[i * RLC_EP_TABLE],
@@ -1387,18 +1414,19 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
 
 /**
  * Derive the secret key for a specific identity directly from its parent node.
- * The function follows the steps of the BBG HIBE key generation (where k is the depth of the identity,
- * k-1 is depth of the parent node and l is total depth of the tree):
+ * The function follows the steps of the BBG HIBE key generation (where k is the depth of the
+ * identity, k-1 is depth of the parent node and l is total depth of the tree):
  *  - [in] public_params = [g, g_1, g_2, g_3, h_1, ..., h_l]
  *  - [in] parent_secret_key = [a_0', a_1', b_k', ..., b_l']
- *  - [out] secret_key = [a_0' * b_k'^I_k * (h_1^I_1 * ... * h_k^I_k * g_3)^r, a_1' * g^r, b_{k+1}' * h_{k+1}^r, ..., b_l' * h_l^r] = [a_0, a_1, b_{k+1}, ..., b_l]
- * 
+ *  - [out] secret_key = [a_0' * b_k'^I_k * (h_1^I_1 * ... * h_k^I_k * g_3)^r, a_1' * g^r, b_{k+1}'
+ * * h_{k+1}^r, ..., b_l' * h_l^r] = [a_0, a_1, b_{k+1}, ..., b_l]
+ *
  * @param[out] secret_key       - generated secret key, delegated from the parent node's secret key
  * @param[in] parent_secret_key - secret key of parent node
  * @param[in] identity          - the identity for which a secret key shall be generated
  * @param[in] public_params     - public parameter set of the BBG setup
- * 
- * @return BFE_SUCESS if no errors occur, an error code otherwise 
+ *
+ * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
                                           bbg_secret_key_t* parent_secret_key,
@@ -1406,7 +1434,7 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
                                           bbg_public_params_t* public_params) {
 
   // Sanity check, if parent_secret_key is actually derived from a parent node of the given identity
-  const unsigned total_depth = public_params->max_delegatable_depth + 1;
+  const unsigned total_depth  = public_params->max_delegatable_depth + 1;
   const unsigned parent_depth = total_depth - parent_secret_key->num_delegatable_levels;
   if (parent_depth != (identity->depth - 1)) {
     return BFE_ERROR_INVALID_PARAM;
@@ -1435,7 +1463,7 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
     // secret_key->associated_id = h_k^w = h_k^H_k
     g1_mul_fix(secret_key->associated_id,
                &public_params->h_precomputation_tables[(identity->depth - 1) * RLC_EP_TABLE], w);
-    
+
     // UPDATE: secret_key->associated_id
     // --> parent_secret_key->associated_id = g_3 * h_1^H_1 * ... * h_{k-1}^H_{k-1}
     g1_add(secret_key->associated_id, parent_secret_key->associated_id, secret_key->associated_id);
@@ -1476,7 +1504,6 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
   return result_status;
 }
 
-
 static int bbg_convert_key_to_bit_string(uint8_t* bit_string, bbg_key_t* key) {
   int result_status = BFE_SUCCESS;
   RLC_TRY {
@@ -1494,14 +1521,13 @@ static int bbg_convert_key_to_bit_string(uint8_t* bit_string, bbg_key_t* key) {
 }
 ///@}
 
-
 /* >> TBFE << */
 /**
  * The following functions provide the interface to the TBFE scheme,
  * as well as some utility functions.
  * More detailed documentation can be found in the './include/tbfe-bbg.h' header file.
  */
-///@{ 
+///@{
 
 int tbfe_bbg_init_public_key(tbfe_bbg_public_key_t* public_key, unsigned int total_depth) {
   if (!public_key) {
@@ -1664,7 +1690,7 @@ int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext, const uin
 
   memcpy(ciphertext->eddsa_pk.key, src, Ed25519_KEY_BYTES);
   src += Ed25519_KEY_BYTES;
-  
+
   return BFE_SUCCESS;
 }
 
@@ -1698,12 +1724,12 @@ static inline unsigned long compute_tree_size(const unsigned h) {
  * This function builds a mapping between index of nodes (time interval) and identities.
  * Currently ALL nodes in the tree are used as time interval.
  * The mapping does a pre-order traversal of the tree and assigns indices in that order.
- * 
+ *
  * @param[out] identity - generated identity element
  * @param[in] index     - index of one node in the tree (starting at 1)
  * @param[in] height    - height of the tree without bloom filter keys and CHK layer
- * 
- * @return BFE_SUCESS if no errors occur, an error code otherwise 
+ *
+ * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned long index,
                                       const unsigned height) {
@@ -1806,7 +1832,6 @@ void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* c
 
   memcpy(serialized, ciphertext->eddsa_pk.key, Ed25519_KEY_BYTES);
   serialized += Ed25519_KEY_BYTES;
-
 }
 
 unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key) {
@@ -1840,14 +1865,15 @@ unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
 }
 
 /**
- * Generates an identity element, where all elements of the identity path are set to 0, execpt the last one,
- * which is set to the specfied value.
- * 
+ * Generates an identity element, where all elements of the identity path are set to 0, execpt the
+ * last one, which is set to the specfied value.
+ *
  * @param[out] identity       - allocated identity element which shall be initialized
  * @param[in] depth           - depth of the identity in the tree
- * @param[in] last_component  - value of the last component in the identity path (e.g. id at last level)
- * 
- * @return BFE_SUCESS if no errors occur, an error code otherwise 
+ * @param[in] last_component  - value of the last component in the identity path (e.g. id at last
+ * level)
+ *
+ * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int generate_zero_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
                                                       unsigned int last_component) {
@@ -1941,8 +1967,8 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     for (unsigned identity = 0; identity < bloom_filter_size; ++identity) {
       // Generate the identities 0|0, 0|1, 0|2, ..., 0|m-1.
       bbg_identity_t identity_0i;
-      // We use identity '0i' at depth 2, since we start at depth 1 with identity '0' as first time interval!
-      // The bloom filters just add one layer to identity '0'
+      // We use identity '0i' at depth 2, since we start at depth 1 with identity '0' as first time
+      // interval! The bloom filters just add one layer to identity '0'
       ret |= generate_zero_identity_with_last_component(&identity_0i, 2, identity);
       if (ret) {
         goto clear_loop;
@@ -1973,7 +1999,8 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
-  // Puncture sk_0 and compute keys for its children (00, 01) and for identity 1 (e.g. next time intervals).
+  // Puncture sk_0 and compute keys for its children (00, 01) and for identity 1 (e.g. next time
+  // intervals).
   bbg_identity_t identity_1;
   bbg_identity_t identity_00;
   bbg_identity_t identity_01;
@@ -2023,10 +2050,11 @@ clear:
 int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
                     tbfe_bbg_public_key_t* public_key, unsigned int time_interval) {
   if (!ciphertext || !public_key) {
-   return BFE_ERROR_INVALID_PARAM;
+    return BFE_ERROR_INVALID_PARAM;
   }
 
-  // Get the identity of the current time interval and store it in 'tau' --> e.g. the identity for which the message shall be encrypted
+  // Get the identity of the current time interval and store it in 'tau' --> e.g. the identity for
+  // which the message shall be encrypted
   bbg_identity_t tau = {0, NULL};
   int result_status =
       tbfe_bbg_index_to_identity(&tau, time_interval, public_key->params.max_delegatable_depth - 1);
@@ -2047,7 +2075,6 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   if (result_status) {
     goto clear_eddsa_sk;
   }
-
 
   // Initialize and sample a random Key to encapsulate
   bbg_key_t _key;
@@ -2086,7 +2113,8 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
       goto clear_ciphertext;
     }
 
-    // For all k hash functions encapsulate the corresponding identity with the BBG HIBE --> k ciphertexts
+    // For all k hash functions encapsulate the corresponding identity with the BBG HIBE --> k
+    // ciphertexts
     result_status = bbg_encapsulate(ct, _key.k, &public_key->pk, &ciphertext->eddsa_pk,
                                     &public_key->params, &identity_tau_i);
     if (result_status) {
@@ -2169,8 +2197,8 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
 
   // Use this variables to store the index (1...k) of the first bloom filter key,
   // that can decapsulate the ciphertext and is not punctured yet
-  int decapsulating_identity_index = -1;  // in [1..k] -> points to the right ciphertext 
-  unsigned decapsulating_identity  = 0;   // in [1..m] -> points to the right secret key
+  int decapsulating_identity_index = -1; // in [1..k] -> points to the right ciphertext
+  unsigned decapsulating_identity  = 0;  // in [1..m] -> points to the right secret key
 
   // Derive the identities under which this ciphertext was encapsulated and mark
   // the first identity for which the secret key has not been punctured yet.
@@ -2258,7 +2286,6 @@ int tbfe_bbg_puncture_ciphertext(tbfe_bbg_secret_key_t* secret_key,
   return BFE_SUCCESS;
 }
 
-
 /**
  * Derives a BBG secret key, corresponding to some given identity, from its parent node and
  * adds it to the specified vector.
@@ -2271,7 +2298,8 @@ static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* param
     return BFE_ERROR;
   }
 
-  int ret = bbg_init_secret_key(sknew, params->max_delegatable_depth + 1 - identity->depth, identity->depth);
+  int ret = bbg_init_secret_key(sknew, params->max_delegatable_depth + 1 - identity->depth,
+                                identity->depth);
   if (ret) {
     goto clear;
   }
@@ -2436,7 +2464,6 @@ clear_tau:
   return result_status;
 }
 ///@}
-
 
 /* >> COMPARE << */
 
