@@ -150,6 +150,9 @@ static void bbg_clear_key (bbg_key_t * key);
 // ## HASHING
 static void bbg_hash_id (bn_t hashed_id,const unsigned id,const unsigned prefix);
 static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk);
+static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v);
+static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
+                                        tbfe_bbg_public_key_t* public_key);
 static void hash_update_bbg_ciphertext (Keccak_HashInstance * ctx,bbg_ciphertext_t * ciphertext);
 static void hash_update_bbg_ciphertexts (Keccak_HashInstance * ctx,vector_t * ciphertexts);
 // ## BBG HIBE
@@ -304,26 +307,19 @@ static int eddsa_sign(eddsa_sig_t* eddsa, vector_t * ciphertexts, eddsa_sk_t* ed
  
   int result_status = BFE_SUCCESS;
 
-  // Serialize public key
-  int pk_bytes = tbfe_bbg_public_key_size(pk);
-  uint8_t* serialized_pk = malloc(pk_bytes);
-  if(!serialized_pk) return BFE_ERROR;
-  tbfe_bbg_public_key_serialize(serialized_pk, pk);
-
   // Hash (ciphertexts || pk)
   Keccak_HashInstance ctx;
   Keccak_HashInitialize_SHAKE256(&ctx);
   Keccak_HashUpdate(&ctx, &SIGNATURE_PREFIX, sizeof(SIGNATURE_PREFIX) * 8);
   hash_update_bbg_ciphertexts(&ctx, ciphertexts);
-  Keccak_HashUpdate(&ctx, serialized_pk, pk_bytes * 8); // Add public key to hash
+  hash_update_tbfe_public_key(&ctx, pk); // Add public key to hash
   Keccak_HashFinal(&ctx, NULL);
   uint8_t hash_buf[MAX_ORDER_SIZE];
   Keccak_HashSqueeze(&ctx, hash_buf, order_size * 8);
 
   EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
   if(!md_ctx){
-    result_status = BFE_ERROR;
-    goto clean_serialized_pk;
+    return BFE_ERROR;
   }
 
   // Create a EVP_PKEY data element from the raw private key information
@@ -350,8 +346,6 @@ static int eddsa_sign(eddsa_sig_t* eddsa, vector_t * ciphertexts, eddsa_sk_t* ed
 clean:
   EVP_PKEY_free(pkey);
 	EVP_MD_CTX_free(md_ctx);
-clean_serialized_pk:
-  free(serialized_pk);
   
   return result_status;
 }
@@ -374,26 +368,19 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
 
   int result_status = BFE_SUCCESS;
 
-  // Serialize the public key
-  int pk_bytes = tbfe_bbg_public_key_size(pk);
-  uint8_t* serialized_pk = malloc(pk_bytes);
-  if(!serialized_pk) return BFE_ERROR;
-  tbfe_bbg_public_key_serialize(serialized_pk, pk);
-
   // Hash (ciphertexts || pk)
   Keccak_HashInstance ctx;
   Keccak_HashInitialize_SHAKE256(&ctx);
   Keccak_HashUpdate(&ctx, &SIGNATURE_PREFIX, sizeof(SIGNATURE_PREFIX) * 8);
   hash_update_bbg_ciphertexts(&ctx, ciphertexts);
-  Keccak_HashUpdate(&ctx, serialized_pk, pk_bytes * 8); // Add pk to hash
+  hash_update_tbfe_public_key(&ctx, pk); // Add public key to hash
   Keccak_HashFinal(&ctx, NULL);
   uint8_t hash_buf[MAX_ORDER_SIZE];
   Keccak_HashSqueeze(&ctx, hash_buf, order_size * 8);
   
   EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
   if(!md_ctx){
-    result_status = BFE_ERROR;
-    goto clean_serialized_pk;
+    return BFE_ERROR;
   }
 
 
@@ -417,8 +404,6 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
 clean:
   EVP_PKEY_free(pkey);
 	EVP_MD_CTX_free(md_ctx);
-clean_serialized_pk:
-  free(serialized_pk);
 
   return result_status;
 }
@@ -916,9 +901,47 @@ static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk){
 }
 
 /**
+ * Updates the hash instance with the given integer..
+ *
+ * @param[out] ctx  - hash instance
+ * @param[in] v     - the input integer
+ */
+static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v) {
+  v = htole32(v);
+  uint8_t buf[sizeof(v)];
+  memcpy(buf, &v, sizeof(v));
+  Keccak_HashUpdate(ctx, buf, sizeof(buf) * 8);
+}
+
+/**
+ * Updates the hash instance with the given tbfe public key.
+ * The order of the hash updates follows the serialization order
+ *
+ * @param[out] ctx        - hash instance
+ * @param[in] public_key  - the tbfe public key that shall be hashed
+ */
+static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
+                                        tbfe_bbg_public_key_t* public_key) {
+  // Bloom filter parameter
+  hash_update_u32(ctx, public_key->bloom_filter_hashes);
+  hash_update_u32(ctx, public_key->bloom_filter_size);
+  // Public key
+  hash_update_gt(ctx, public_key->pk.pk);
+  // Public parameter
+  hash_update_u32(ctx, public_key->params.max_delegatable_depth);
+  hash_update_g1(ctx, public_key->params.g);
+  hash_update_g2(ctx, public_key->params.g_hat);
+  hash_update_g1(ctx, public_key->params.g2);
+  hash_update_g1(ctx, public_key->params.g3);
+  for (size_t i = 0; i < public_key->params.max_delegatable_depth + 1; i++) {
+    hash_update_g1(ctx, public_key->params.h[i]);
+  }
+}
+
+/**
  * Generates the hash of the given BBG ciphertext c = [a,b,c]
  * 
- * @param[out] ctx        - generated hash
+ * @param[out] ctx        - hash instance
  * @param[in] ciphertext  - input bbg ciphertext to be hashed
  */
 static void hash_update_bbg_ciphertext(Keccak_HashInstance* ctx, bbg_ciphertext_t* ciphertext) {
@@ -930,7 +953,7 @@ static void hash_update_bbg_ciphertext(Keccak_HashInstance* ctx, bbg_ciphertext_
 /**
  * Generates the hash of an vector of BBG ciphertexts
  * 
- * @param[out] ctx        - generated hash
+ * @param[out] ctx        - hash instance
  * @param[in] ciphertexts - input vector conatining multiple bbg ciphertexts
  */
 static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciphertexts) {
