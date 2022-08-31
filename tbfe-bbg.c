@@ -44,7 +44,7 @@
 
 /* BBG ciphertext consists of three group elemnts */
 #define BBG_CIPHERTEXT_SIZE (G1_SIZE_COMPRESSED + G2_SIZE_COMPRESSED + GT_SIZE_COMPRESSED)
-/* BBG publick key consists of one group element*/
+/* BBG public key consists of one group element*/
 #define BBG_PUBLIC_KEY_SIZE GT_SIZE_COMPRESSED
 
 /**
@@ -110,7 +110,7 @@ static const uint8_t VERIFICATION_PREFIX = 4;
 // ############## FUNCTION PROTOTYPES ###############
 // ##################################################
 
-// OpenSSL EdDSA Signatures
+// ## EdDSA SIGNATURE
 static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk);
 static void eddsa_clear_pk(eddsa_pk_t* eddsa_pk);
 static void eddsa_clear_sig(eddsa_sig_t* eddsa);
@@ -186,41 +186,42 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
                                           bbg_public_params_t* public_params);
 static int bbg_convert_key_to_bit_string(uint8_t* bit_string, bbg_key_t* key);
 // ## TBFE
-// ### Commented function define the public TBFE interface and are already declared in
-// './include/tbfe-bbg.h' int tbfe_bbg_init_public_key (tbfe_bbg_public_key_t * public_key,unsigned
-// int total_depth); int tbfe_bbg_public_key_deserialize (tbfe_bbg_public_key_t * public_key,const
-// uint8_t * src); void tbfe_bbg_clear_public_key (tbfe_bbg_public_key_t * public_key); int
-// tbfe_bbg_init_secret_key (tbfe_bbg_secret_key_t * secret_key,unsigned int
-// bloom_filter_size,double false_positive_prob); int tbfe_bbg_secret_key_deserialize
-// (tbfe_bbg_secret_key_t * secret_key,const uint8_t * src);
+// ### Commented functions define the public TBFE interface, declared in './include/tbfe-bbg.h'
+/* int tbfe_bbg_init_public_key(tbfe_bbg_public_key_t* public_key, unsigned int total_depth); */
+/* int tbfe_bbg_public_key_deserialize(tbfe_bbg_public_key_t* public_key, const uint8_t* src); */
+/* void tbfe_bbg_clear_public_key(tbfe_bbg_public_key_t* public_key); */
+/* int tbfe_bbg_init_secret_key(tbfe_bbg_secret_key_t* secret_key, unsigned int bloom_filter_size,
+                             double false_positive_prob); */
+/* int tbfe_bbg_secret_key_deserialize(tbfe_bbg_secret_key_t* secret_key, const uint8_t* src); */
 static void tbfe_bbg_vector_secret_key_free(vector_t* vector_secret_key);
-// void tbfe_bbg_clear_secret_key (tbfe_bbg_secret_key_t * secret_key);
-// int tbfe_bbg_init_ciphertext (tbfe_bbg_ciphertext_t * ciphertext);
-// int tbfe_bbg_ciphertext_deserialize (tbfe_bbg_ciphertext_t * ciphertext,const uint8_t * src);
-// void tbfe_bbg_clear_ciphertext (tbfe_bbg_ciphertext_t * ciphertext);
+/* void tbfe_bbg_clear_secret_key(tbfe_bbg_secret_key_t* secret_key); */
+/* int tbfe_bbg_init_ciphertext(tbfe_bbg_ciphertext_t* ciphertext); */
+/* int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext, const uint8_t* src); */
+/* void tbfe_bbg_clear_ciphertext(tbfe_bbg_ciphertext_t* ciphertext); */
 static unsigned long compute_tree_size(const unsigned h);
 static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned long index,
                                       const unsigned height);
-// void tbfe_bbg_public_key_serialize (uint8_t * serialized,tbfe_bbg_public_key_t * public_key);
-// void tbfe_bbg_secret_key_serialize (uint8_t * serialized,tbfe_bbg_secret_key_t * secret_key);
-// void tbfe_bbg_ciphertext_serialize (uint8_t * serialized,tbfe_bbg_ciphertext_t * ciphertext);
-// unsigned tbfe_bbg_public_key_size (const tbfe_bbg_public_key_t * public_key);
-// unsigned tbfe_bbg_secret_key_size (const tbfe_bbg_secret_key_t * secret_key);
-// unsigned tbfe_bbg_ciphertext_size (const tbfe_bbg_ciphertext_t * ciphertext);
+/* void tbfe_bbg_public_key_serialize(uint8_t* serialized, tbfe_bbg_public_key_t* public_key); */
+/* void tbfe_bbg_secret_key_serialize(uint8_t* serialized, tbfe_bbg_secret_key_t* secret_key); */
+/* void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* ciphertext); */
+/* unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key); */
+/* unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key); */
+/* unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext); */
 static int generate_zero_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
                                                       unsigned int last_component);
 static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
                               const bbg_identity_t* identity, unsigned int total_depth);
-// int tbfe_bbg_keygen (tbfe_bbg_public_key_t * public_key,tbfe_bbg_secret_key_t * secret_key);
-// int tbfe_bbg_encaps (uint8_t * key,tbfe_bbg_ciphertext_t * ciphertext,tbfe_bbg_public_key_t *
-// public_key,unsigned int time_interval); int tbfe_bbg_decaps (uint8_t * key,tbfe_bbg_ciphertext_t
-// * ciphertext,tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_public_key_t * public_key); int
-// tbfe_bbg_puncture_ciphertext (tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_ciphertext_t *
-// ciphertext);
+/* int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key); */
+/* int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
+                    tbfe_bbg_public_key_t* public_key, unsigned int time_interval); */
+/* int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
+                    tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_public_key_t* public_key); */
+/* int tbfe_bbg_puncture_ciphertext(tbfe_bbg_secret_key_t* secret_key,
+                    tbfe_bbg_ciphertext_t* ciphertext); */
 static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* params,
                                        bbg_secret_key_t* sk, const bbg_identity_t* identity);
-// int tbfe_bbg_puncture_interval (tbfe_bbg_secret_key_t * secret_key,tbfe_bbg_public_key_t *
-// public_key,unsigned int time_interval);
+/* int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_public_key_t*
+                    public_key, unsigned int time_interval); */
 
 // ## COMPARE
 #if defined(BFE_STATIC)
@@ -427,6 +428,7 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
     goto clean;
   }
 
+  // Verify signature
   if (EVP_DigestVerify(md_ctx, eddsa->sig, Ed25519_SIG_BYTES, hash_buf, order_size) ==
       EVP_FAILURE) {
     result_status = BFE_ERROR;
@@ -444,7 +446,6 @@ clean:
 /* >> SIZE << */
 /**
  * Return the size in bytes of the given element.
- * This function are defined for 'bbg_identity_t', 'bbg_secret_key_t' and 'bbg_public_params_t'.
  */
 ///@{
 
@@ -467,21 +468,21 @@ static unsigned bbg_get_public_params_size(const bbg_public_params_t* public_par
 /* >> INIT << */
 /**
  * The following functions initialize (already allocted - either heap or stack) structures with
- * initial values. Some structures use RELIC specific datatypes (e.g. bn_t, gt_t, ...), which are
- * also created and defined in this functions.
+ * initial values. Some structures use RELIC specific datatypes (e.g. bn_t, gt_t, ...), that are
+ * created and defined in this functions.
  */
 ///@{
 
 /**
  * Initializes the given identity with the provided depth
  *
- * @param[out] identity - already allocated identity element which shall be initialized
- * @param[in] id_depth  - depth of the newly initialized identity
+ * @param[out] identity - the identity element which shall be initialized
+ * @param[in] id_depth  - the depth of the identity
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
 static int bbg_init_identity(bbg_identity_t* identity, unsigned int id_depth) {
-  if (!identity) { // Only consider valid pointer
+  if (!identity) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -513,10 +514,9 @@ static int bbg_init_public_key(bbg_public_key_t* pk) {
 /**
  * Initializes the given BBG secret key.
  *
- * @param[out] sk                 - initialized secret key
- * @param[in] delegetable_levels  - number of delegetable levels of the corresponding identity
- * (defines key size)
- * @param[in] id_depth            - depth of the corresponding identity
+ * @param[out] sk                 - the initialized secret key
+ * @param[in] delegetable_levels  - the number of delegetable levels of the corresponding identity
+ * @param[in] id_depth            - the depth of the corresponding identity
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
@@ -584,6 +584,15 @@ static int bbg_init_ciphertext(bbg_ciphertext_t* ciphertext) {
   return ret;
 }
 
+/**
+ * Initializes public parameters.
+ * The total depth determines the number of basis elements h.
+ *
+ * @param[out] params - the initialized parameter set
+ * @param[in] depth   - the total depth of the tree
+ *
+ * @return BFE_SUCCESS if no error occurs, an error code otherwise.
+ */
 static int bbg_init_public_params(bbg_public_params_t* params, unsigned int depth) {
   if (!params || depth < 3) {
     return BFE_ERROR_INVALID_PARAM;
@@ -899,7 +908,7 @@ static void bbg_clear_key(bbg_key_t* key) {
  * This function generates the hash of some unsigned integer.
  */
 static void bbg_hash_id(bn_t hashed_id, const unsigned id, const unsigned prefix) {
-  // Change the endiness of the input parameter
+  // Fix the endiness of the input parameter, so it is the same for different devices
   const uint32_t prefix_u32 = htole32(prefix);
   const uint32_t id_u32     = htole32(id);
 
@@ -914,9 +923,8 @@ static void bbg_hash_id(bn_t hashed_id, const unsigned id, const unsigned prefix
 /**
  * Generates the SHA3 hash of the public key of the given EdDSA key pair
  *
- * @param[out] hash     - generated hash
- * @param[in] eddsa_pk  - EdDSA public key
- * @param[in] prefix    - prefix used for hashing
+ * @param[out] hash     - the generated hash
+ * @param[in] eddsa_pk  - the EdDSA public key
  */
 static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk) {
   Keccak_HashInstance ctx;
@@ -928,9 +936,9 @@ static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk) {
 }
 
 /**
- * Updates the hash instance with the given integer..
+ * Updates the hash instance with the given integer.
  *
- * @param[out] ctx  - hash instance
+ * @param[out] ctx  - the hash instance
  * @param[in] v     - the input integer
  */
 static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v) {
@@ -942,7 +950,7 @@ static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v) {
  * Updates the hash instance with the given tbfe public key.
  * The order of the hash updates follows the serialization order
  *
- * @param[out] ctx        - hash instance
+ * @param[out] ctx        - the hash instance
  * @param[in] public_key  - the tbfe public key that shall be hashed
  */
 static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
@@ -966,8 +974,8 @@ static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
 /**
  * Generates the hash of the given BBG ciphertext c = [a,b,c]
  *
- * @param[out] ctx        - hash instance
- * @param[in] ciphertext  - input bbg ciphertext to be hashed
+ * @param[out] ctx        - the hash instance
+ * @param[in] ciphertext  - the input bbg ciphertext to be hashed
  */
 static void hash_update_bbg_ciphertext(Keccak_HashInstance* ctx, bbg_ciphertext_t* ciphertext) {
   hash_update_gt(ctx, ciphertext->a);
@@ -978,8 +986,8 @@ static void hash_update_bbg_ciphertext(Keccak_HashInstance* ctx, bbg_ciphertext_
 /**
  * Generates the hash of an vector of BBG ciphertexts
  *
- * @param[out] ctx        - hash instance
- * @param[in] ciphertexts - input vector conatining multiple bbg ciphertexts
+ * @param[out] ctx        - the hash instance
+ * @param[in] ciphertexts - the input vector conatining multiple bbg ciphertexts
  */
 static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciphertexts) {
   const unsigned int count = vector_size(ciphertexts);
@@ -1001,8 +1009,8 @@ static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciph
  * Converts an identity element into a vector of Zp elements,
  * by hashing every element of the idenitity-path (from root to ID).
  *
- * @param[out] identity_zp_vector - output vector of Zp elements
- * @param[in] identity            - identity element to be converted
+ * @param[out] identity_zp_vector - the output vector of Zp elements
+ * @param[in] identity            - the identity element to be converted
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
@@ -1033,9 +1041,9 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
  * total_depth). Alpha is random in Zp and g_1 = g_hat^alpha. The master key is set to g_2^alpha.
  * The public key is set to e(g_2, g_1), where e is a bilinear function.
  *
- * @param[out] master_key     - generated master key used for key derivation
- * @param[out] public_key     - generated public key
- * @param[out] public_params  - generated public parameter set
+ * @param[out] master_key     - the generated master key used for key derivation
+ * @param[out] public_key     - the generated public key
+ * @param[out] public_params  - the generated public parameter set
  * @param[in] total_depth     - the total depth of the interval tree (includes two layers for bloom
  * filter keys and CHK signature)
  *
@@ -1100,7 +1108,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
  * key)
  * @param[in] public_key      - the public key used for encapsulation
  * @param[in] eddsa_pk        - the public EdDSA key
- * @param[in] public_params   - public parameter set of the BBG HIBE
+ * @param[in] public_params   - the public parameter set of the BBG HIBE
  * @param[in] identity        - the identity for which the message shall be encrypted
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise
@@ -1138,7 +1146,7 @@ static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_publi
       g1_add(ciphertext->c, ciphertext->c, tmp);
     }
 
-    // tmp = h_{k+1}^u --> encrypt with eddsa_ok as identity (e.g. add an additional CHK level)
+    // tmp = h_{k+1}^u --> encrypt with eddsa_pk as identity (adds an additional CHK level)
     g1_mul_fix(tmp, &public_params->h_precomputation_tables[identity->depth * RLC_EP_TABLE], u);
     g1_add(ciphertext->c, ciphertext->c, tmp);
 
@@ -1177,8 +1185,8 @@ clean:
  * @param[in] ciphertext      - the given BBG ciphertext which shall be decapsulated
  * @param[in] secret_key      - the secret key used to decapsulate the ciphertext
  * @param[in] eddsa_pk        - the EdDSA public key
- * @param[in] public_params   - public parameter set of the BBG HIBE
- * @param[in] identity        - identity for which the message was encapsulated
+ * @param[in] public_params   - the public parameter set of the BBG HIBE
+ * @param[in] identity        - the identity for which the message was encapsulated
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise
  */
@@ -1275,10 +1283,10 @@ clear:
 
 /**
  * Copy an identity element to another one.
- * Depth of both identities has to be euqal.
+ * Depth of both identities has to be equal.
  *
- * @param [out] dest  - allocated identity struct pointer, to which shall be copied
- * @param [in] src    - identity which shall be copied
+ * @param [out] dest  - the destination identity
+ * @param [in] src    - the source identity
  */
 static int bbg_copy_identity(bbg_identity_t* dest, const bbg_identity_t* src) {
   if (!dest || !src || dest->depth != src->depth) {
@@ -1326,10 +1334,10 @@ static int bbg_sample_key(bbg_key_t* key) {
  *  - [out] secret_key = [mk*(h_1^I_1 * ... * h_k^I_k * g_3)^r, g^r, h_{k+1}^r, ..., h_l^r] = [a_0,
  * a_1, b_{k+1}, ..., b_l]
  *
- * @param[out] secret_key   - generated secret key, which is derived from the master key
- * @param[in] master_key    - master key from BBG setup
+ * @param[out] secret_key   - the generated secret key, which is derived from the master key
+ * @param[in] master_key    - the master key from BBG setup
  * @param[in] identity      - the identity for which a secret key shall be generated
- * @param[in] public_params - public parameter set of the BBG setup
+ * @param[in] public_params - the public parameter set of the BBG setup
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
@@ -1337,9 +1345,6 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
                                               bbg_master_key_t* master_key,
                                               const bbg_identity_t* identity,
                                               bbg_public_params_t* public_params) {
-  // const unsigned total_depth            = public_params->max_delegatable_depth + 1;
-  // const unsigned num_total_levels       = total_depth - identity->depth;
-  // const unsigned num_delegatable_levels = num_total_levels - 1;
 
   int result_status = BFE_SUCCESS;
 
@@ -1356,7 +1361,7 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     g1_new(h_i_to_the_identity_i);
     bn_new(v);
 
-    // Identity has to be converted into an zp vector (e.g. like a hash function).
+    // Identity has to be converted into an zp vector.
     // identity_zp_vector = {i=1 to k} h_i^{H(0||I_i) -> hashed identity, where I_i =
     // identity->id[i]
     bbg_convert_identity_to_zp_vector(identity_zp_vector, identity);
@@ -1419,10 +1424,11 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
  *  - [out] secret_key = [a_0' * b_k'^I_k * (h_1^I_1 * ... * h_k^I_k * g_3)^r, a_1' * g^r, b_{k+1}'
  * * h_{k+1}^r, ..., b_l' * h_l^r] = [a_0, a_1, b_{k+1}, ..., b_l]
  *
- * @param[out] secret_key       - generated secret key, delegated from the parent node's secret key
- * @param[in] parent_secret_key - secret key of parent node
+ * @param[out] secret_key       - the generated secret key, delegated from the parent node's secret
+ * key
+ * @param[in] parent_secret_key - the secret key of parent node
  * @param[in] identity          - the identity for which a secret key shall be generated
- * @param[in] public_params     - public parameter set of the BBG setup
+ * @param[in] public_params     - the public parameter set of the BBG setup
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
@@ -1437,9 +1443,6 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
   if (parent_depth != (identity->depth - 1)) {
     return BFE_ERROR_INVALID_PARAM;
   }
-
-  // const unsigned num_total_levels       = total_depth - identity->depth;
-  // const unsigned num_delegatable_levels = num_total_levels - 1;
 
   int result_status = BFE_SUCCESS;
 
@@ -1471,7 +1474,7 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
 
     // ## a_0 = b_k'^H_k * (g_3 * h_1^H_1 * ... * h_k^H_k)^u *  a_0'
     // where a_0' is parent_key->a0
-    // IMPORTANT: b_k' = b[0] of parent key
+    // NOTE: b_k' = b[0] of parent key
     g1_mul_sim(secret_key->a0, parent_secret_key->b[0], w, secret_key->associated_id, u);
     g1_add(secret_key->a0, secret_key->a0, parent_secret_key->a0);
 
@@ -1706,8 +1709,8 @@ void tbfe_bbg_clear_ciphertext(tbfe_bbg_ciphertext_t* ciphertext) {
 }
 
 /**
- * Calculates the  size of a binary tree with depth h-1 (root is at level 1).
- * E.g.: tree with heigh h = 2 --> 2^3-1 = 7 nodes
+ * Calculates the  size of a binary tree with height (depth) h-1 (root is at level 1).
+ * E.g.: tree with height h = 2 --> 2^3-1 = 7 nodes
  *      o
  *     / \
  *    o   o
@@ -1723,9 +1726,9 @@ static inline unsigned long compute_tree_size(const unsigned h) {
  * Currently ALL nodes in the tree are used as time interval.
  * The mapping does a pre-order traversal of the tree and assigns indices in that order.
  *
- * @param[out] identity - generated identity element
- * @param[in] index     - index of one node in the tree (starting at 1)
- * @param[in] height    - height of the tree without bloom filter keys and CHK layer
+ * @param[out] identity - the generated identity element
+ * @param[in] index     - the index of one node in the tree (starting at 1)
+ * @param[in] height    - the height of the tree without bloom filter keys and CHK layer
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
@@ -1743,7 +1746,7 @@ static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned l
   unsigned long node_count = 0;
   size_t length            = 0;
 
-  // traverse tree in pre-order --> e.g. root -> left -> right
+  // traverse tree in pre-order --> (root -> left -> right)
   for (size_t level = 0; level < height; ++level) {
     unsigned long subtree_height = compute_tree_size(height - level - 1);
     if (node_count == index) {
@@ -1866,10 +1869,10 @@ unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
  * Generates an identity element, where all elements of the identity path are set to 0, execpt the
  * last one, which is set to the specfied value.
  *
- * @param[out] identity       - allocated identity element which shall be initialized
- * @param[in] depth           - depth of the identity in the tree
- * @param[in] last_component  - value of the last component in the identity path (e.g. id at last
- * level)
+ * @param[out] identity       - the identity element which shall be initialized
+ * @param[in] depth           - the depth of the identity in the tree
+ * @param[in] last_component  - the value of the last component in the identity path (e.g. id at
+ * last level)
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
@@ -1997,8 +2000,8 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
-  // Puncture sk_0 and compute keys for its children (00, 01) and for identity 1 (e.g. next time
-  // intervals).
+  // Puncture sk_0 and compute keys for its children (00, 01) and for identity 1 (representing
+  // future time intervals).
   bbg_identity_t identity_1;
   bbg_identity_t identity_00;
   bbg_identity_t identity_01;
@@ -2154,7 +2157,7 @@ clear_tau:
 }
 
 /**
- * Implements the TBDE decapsulation function.
+ * Implements the TBFE decapsulation function.
  */
 int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
                     tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_public_key_t* public_key) {
@@ -2193,10 +2196,8 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
 
   omp_set_lock(&secret_key->bloom_filter_mutex);
 
-  // Use this variables to store the index (1...k) of the first bloom filter key,
-  // that can decapsulate the ciphertext and is not punctured yet
   int decapsulating_identity_index = -1; // in [1..k] -> points to the right ciphertext
-  unsigned decapsulating_identity  = 0;  // in [1..m] -> points to the right secret key
+  unsigned decapsulating_identity  = 0;  // in [1..m] -> points to the right bloom filter key
 
   // Derive the identities under which this ciphertext was encapsulated and mark
   // the first identity for which the secret key has not been punctured yet.
@@ -2327,8 +2328,8 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
   if (!secret_key || !public_key) {
     return BFE_ERROR_INVALID_PARAM;
   }
-  // NOTE: time_interval refers to the next epoch,
-  // therefore tau contains the identity of the new timer interval
+  // NOTE: 'time_interval' refers to the next epoch,
+  // therefore tau contains the identity of the new time interval
   bbg_identity_t tau   = {0, NULL};
   const unsigned int t = public_key->params.max_delegatable_depth - 1;
   int result_status    = tbfe_bbg_index_to_identity(&tau, time_interval, t);
@@ -2387,7 +2388,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
     for (unsigned identity = 0; identity < bloom_filter_size; ++identity) {
       // Generate the identities tau|0, tau|1, tau|2, ..., tau|m-1.
       identity_tau_i.id[tau_i_depth - 1] = identity;
-      // NOTE: now the keys are derived from the parent key, not from master key
+      // NOTE: the keys are derived from the parent key, not from master key
       ret |= puncture_derive_key_and_add(&secret_key_private, &public_key->params, sk_tau,
                                          &identity_tau_i);
     }
@@ -2414,7 +2415,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
   }
 
   // If we are not in the leaf of the tree, we have to generate keys for its children
-  // --> create keys for the next time intervals (think of the tree structure)
+  // --> create keys for the next time intervals
   if (sk_tau->identity.depth < t) {
     bbg_identity_t identity_tau_i;
     result_status = bbg_init_identity_from(&identity_tau_i, tau_i_depth, &tau);

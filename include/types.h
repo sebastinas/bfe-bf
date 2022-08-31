@@ -37,7 +37,7 @@ typedef enum {
   BFE_ERROR_KEY_PUNCTURED = 3, /**< The key was already punctured */
 } bfe_bf_error_t;
 
-// Error codes for OpenSSL EVP
+/* Error codes for OpenSSL EVP */
 typedef enum {
   EVP_FAILURE = 0, /**< An error occurred */
   EVP_SUCCESS = 1, /**< All operations were successful */
@@ -95,7 +95,7 @@ typedef struct {
   g2_t g_hat;
   g1_t g2;
   g1_t g3;
-  g1_t* h;                       /**< An array of group G_1 elements (also called basis-elements) */
+  g1_t* h;                       /**< An array of group G_1 elements (basis-elements) */
   g1_t* h_precomputation_tables; /**< Precomputation table for faster exponentiation h-elements */
 } bbg_public_params_t;
 
@@ -140,9 +140,8 @@ typedef struct {
       bloom_filter_mutex; /**< Mutex lock to perform multithreaded operations on the bloom filter*/
   vector_t* sk_bloom;     /**< Vector containing m bloom filter keys that belong to the current time
                              interval secret key */
-  vector_t* sk_time; /**< Vector of stored secrety keys (without bloom filter keys) belonging to
-                        some future time interval. This vector represents the interval tree and is
-                        needed for interval puncturing. */
+  vector_t* sk_time; /**< Vector of secret keys belonging to some future time interval. This vector
+                        represents the interval tree and is needed for interval puncturing. */
   unsigned next_interval; /**< Keeps track of the next time interval */
 } tbfe_bbg_secret_key_t;
 
@@ -154,8 +153,7 @@ typedef struct {
   vector_t* Cs;        /**< Array of k (number of bloom filter hash functions) BBG ciphertexts */
   eddsa_sig_t eddsa;   /**< Signature verifying integrity (see CHK for CCA security) */
   eddsa_pk_t eddsa_pk; /**< Public EdDSA verification key */
-  unsigned int
-      time_interval; /**< Indicates the time interval for which the ciphertext was created */
+  unsigned int time_interval; /**< The time interval for which the ciphertext was created */
 } tbfe_bbg_ciphertext_t;
 
 BFE_END_CDECL
