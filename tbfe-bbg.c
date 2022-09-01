@@ -126,7 +126,7 @@ static unsigned bbg_get_public_params_size(const bbg_public_params_t* public_par
 // ## INIT
 static int bbg_init_identity(bbg_identity_t* identity, unsigned int id_depth);
 static int bbg_init_public_key(bbg_public_key_t* pk);
-static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_levels,
+static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegatable_levels,
                                unsigned int id_depth);
 static int bbg_init_ciphertext(bbg_ciphertext_t* ciphertext);
 static int bbg_init_public_params(bbg_public_params_t* params, unsigned int depth);
@@ -515,12 +515,12 @@ static int bbg_init_public_key(bbg_public_key_t* pk) {
  * Initializes the given BBG secret key.
  *
  * @param[out] sk                 - the initialized secret key
- * @param[in] delegetable_levels  - the number of delegetable levels of the corresponding identity
+ * @param[in] delegatable_levels  - the number of delegatable levels of the corresponding identity
  * @param[in] id_depth            - the depth of the corresponding identity
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise.
  */
-static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_levels,
+static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegatable_levels,
                                unsigned int id_depth) {
   if (!sk) {
     return BFE_ERROR_INVALID_PARAM;
@@ -535,13 +535,13 @@ static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_le
   g2_null(sk->a1);
   g1_null(sk->associated_id);
 
-  sk->b = calloc(delegetable_levels, sizeof(*sk->b));
+  sk->b = calloc(delegatable_levels, sizeof(*sk->b));
   if (!sk->b) {
     return ret;
   }
-  sk->num_delegatable_levels = delegetable_levels;
+  sk->num_delegatable_levels = delegatable_levels;
 
-  for (size_t idx = 0; idx < delegetable_levels; ++idx) {
+  for (size_t idx = 0; idx < delegatable_levels; ++idx) {
     g1_null(sk->b[idx]);
   }
 
@@ -550,7 +550,7 @@ static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegetable_le
     g2_new(sk->a1);
     g1_new(sk->associated_id);
 
-    for (size_t idx = 0; idx < delegetable_levels; ++idx) {
+    for (size_t idx = 0; idx < delegatable_levels; ++idx) {
       g1_new(sk->b[idx]);
     }
   }
