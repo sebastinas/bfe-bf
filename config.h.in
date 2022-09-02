@@ -9,5 +9,6 @@
 /* from cmake settings */
 #cmakedefine MAX_BLOOMFILTER_HASH_COUNT @MAX_BLOOMFILTER_HASH_COUNT@
 #cmakedefine MAX_BFE_KEY_SIZE @MAX_BFE_KEY_SIZE@
+#cmakedefine TBFE_ARITY @TBFE_ARITY@
 
 #endif

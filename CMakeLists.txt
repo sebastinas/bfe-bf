@@ -21,6 +21,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # settings
 set(MAX_BLOOMFILTER_HASH_COUNT 16 CACHE STRING "Maximal number of bloom filter hash functions.")
 set(MAX_BFE_KEY_SIZE 32 CACHE STRING "Maximal size of encapsulated key.")
+set(TBFE_ARITY 2 CACHE STRING "Arity of the TBFE tree.")
 
 include(GNUInstallDirs)
 include(CheckCCompilerFlag)

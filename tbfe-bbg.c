@@ -20,6 +20,8 @@
  * elements as part of some BBG secret key (cmp. BBG HIBE key generation).
  */
 
+#include <config.h>
+
 #include "include/tbfe-bbg.h"
 
 #include "bloom.h"
@@ -44,7 +46,7 @@
 /* BBG public key consists of one group element*/
 #define BBG_PUBLIC_KEY_SIZE GT_SIZE_COMPRESSED
 /* Set arity N of the interval tree */
-#define ARITY 2
+#define ARITY TBFE_ARITY
 /* Add offset to bloom filter index --> BF identities start at (ARITY + 1) */
 #define BF_POS_TO_BF_ID(A) (A + ARITY + 1)
 
