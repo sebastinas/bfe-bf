@@ -1002,8 +1002,7 @@ static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciph
 ///@{
 
 /**
- * Converts an identity element into a vector of Zp elements,
- * by hashing every element of the idenitity-path (from root to ID).
+ * Converts an identity element into a vector of Zp elements.
  *
  * @param[out] identity_zp_vector - the output vector of Zp elements
  * @param[in] identity            - the identity element to be converted
@@ -1021,7 +1020,8 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
   RLC_TRY {
     for (size_t i = 0; i < identity->depth; ++i) {
       bn_new(identity_zp_vector[i]);
-      bbg_hash_id(identity_zp_vector[i], identity->id[i], IDENTITY_PREFIX);
+      // Convert id to bn
+      bn_set_dig(identity_zp_vector[i], identity->id[i]);
     }
   }
   RLC_CATCH_ANY {
@@ -1352,17 +1352,15 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     g1_new(h_i_to_the_identity_i);
     bn_new(v);
 
-    // Identity has to be converted into an zp vector.
-    // identity_zp_vector = {i=1 to k} h_i^{H(0||I_i) -> hashed identity, where I_i =
-    // identity->id[i]
+    // Identity has to be converted into an zp vector of elements I_i
     bbg_convert_identity_to_zp_vector(identity_zp_vector, identity);
 
     // Choose a random v from Z_p^*.
     zp_rand(v);
 
     // ### Calculate sk = [a_0, a_1, b_{k+1}, ..., b_l]
-    // ## a_0 = mk * (prod_{i=1 to k} h_i^{H(0||I_i)} * g_3)^v.
-    // 1.) associated_id = (prod_{i=1 to k} h_i^{H(0||I_i)} * g_3) --> keep this product for further
+    // ## a_0 = mk * (prod_{i=1 to k} h_i^{I_i} * g_3)^v.
+    // 1.) associated_id = (prod_{i=1 to k} h_i^{I_i} * g_3) --> keep this product for further
     // key delegations
     g1_copy(secret_key->associated_id, public_params->g3);
     for (size_t i = 0; i < identity->depth; ++i) {
@@ -1449,21 +1447,21 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
 
     // Consider: parent_depth = k-1  and child_depth = k
 
-    // Hash ID_k of the current identity -> w = H(PREFIX | I_k) = H_k
-    bbg_hash_id(w, identity->id[identity->depth - 1], IDENTITY_PREFIX);
+    // Convert ID_k of the current identity to bn -> w = I_k
+    bn_set_dig(w, identity->id[identity->depth - 1]);
 
-    // secret_key->associated_id = h_k^w = h_k^H_k
+    // secret_key->associated_id = h_k^w = h_k^I_k
     g1_mul_fix(secret_key->associated_id,
                &public_params->h_precomputation_tables[(identity->depth - 1) * RLC_EP_TABLE], w);
 
     // UPDATE: secret_key->associated_id
-    // --> parent_secret_key->associated_id = g_3 * h_1^H_1 * ... * h_{k-1}^H_{k-1}
+    // --> parent_secret_key->associated_id = g_3 * h_1^I_1 * ... * h_{k-1}^I_{k-1}
     g1_add(secret_key->associated_id, parent_secret_key->associated_id, secret_key->associated_id);
 
     // Choose a random w from Z_p^*.
     zp_rand(u);
 
-    // ## a_0 = b_k'^H_k * (g_3 * h_1^H_1 * ... * h_k^H_k)^u *  a_0'
+    // ## a_0 = b_k'^I_k * (g_3 * h_1^I_1 * ... * h_k^I_k)^u *  a_0'
     // where a_0' is parent_key->a0
     // NOTE: b_k' = b[0] of parent key
     g1_mul_sim(secret_key->a0, parent_secret_key->b[0], w, secret_key->associated_id, u);
