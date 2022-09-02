@@ -2312,11 +2312,13 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
   const unsigned tau_i_depth = tau.depth + 1;
 
   bbg_secret_key_t* sk_tau = NULL;
+  size_t sk_tau_index;
   // Get the secret key for new tau (sk_tau) from the keys in sk_time.
   for (size_t i = 0; !sk_tau && i < vector_size(secret_key->sk_time); ++i) {
     bbg_secret_key_t* sk_time_i = vector_get(secret_key->sk_time, i);
     if (bbg_identities_are_equal(&sk_time_i->identity, &tau)) {
-      sk_tau = sk_time_i;
+      sk_tau       = sk_time_i;
+      sk_tau_index = i;
     }
   }
   if (!sk_tau) {
@@ -2418,15 +2420,9 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
   }
 
   // Delete the current tau from sk_time.
-  for (size_t i = 0; i < vector_size(secret_key->sk_time); ++i) {
-    bbg_secret_key_t* sk_time_i = vector_get(secret_key->sk_time, i);
-    if (bbg_identities_are_equal(&sk_time_i->identity, &tau)) {
-      bbg_clear_secret_key(sk_time_i);
-      free(sk_time_i);
-      vector_delete(secret_key->sk_time, i);
-      break;
-    }
-  }
+  bbg_clear_secret_key(sk_tau);
+  free(sk_tau);
+  vector_delete(secret_key->sk_time, sk_tau_index);
 
   // Update the next interval.
   ++secret_key->next_interval;
