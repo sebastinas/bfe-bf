@@ -1096,8 +1096,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
  * Encapsulates a newly generated Key with the BBG HIBE scheme.
  *
  * @param[out] ciphertext     - the generated ciphertext
- * @param[out] message        - the freshly generated plaintext message (in this case a symetric
- * key)
+ * @param[in] message         - the message to encapsulate (in this case a symetric key)
  * @param[in] public_key      - the public key used for encapsulation
  * @param[in] eddsa_pk        - the public EdDSA key
  * @param[in] public_params   - the public parameter set of the BBG HIBE
