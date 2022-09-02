@@ -28,6 +28,7 @@
 #include "vector.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 #include <omp.h>
 #include <stdbool.h>
@@ -1530,7 +1531,7 @@ int tbfe_bbg_public_key_deserialize(tbfe_bbg_public_key_t* public_key, const uin
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  public_key->bloom_filter_hashes = read_u32(&src);
+  public_key->bloom_filter_hashes = read_u8(&src);
   public_key->bloom_filter_size   = read_u32(&src);
 
   if (bbg_init_public_key(&public_key->pk) != BFE_SUCCESS) {
@@ -1645,7 +1646,7 @@ int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext, const uin
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  unsigned int ciphertext_count = read_u32(&src);
+  unsigned int ciphertext_count = read_u8(&src);
 
   ciphertext->time_interval = read_u32(&src);
   ciphertext->Cs            = vector_new(ciphertext_count);
@@ -1757,7 +1758,7 @@ clear_buffer:
 }
 
 void tbfe_bbg_public_key_serialize(uint8_t* serialized, tbfe_bbg_public_key_t* public_key) {
-  write_u32(&serialized, public_key->bloom_filter_hashes);
+  write_u8(&serialized, public_key->bloom_filter_hashes);
   write_u32(&serialized, public_key->bloom_filter_size);
 
   bbg_serialize_public_key(serialized, &public_key->pk);
@@ -1799,7 +1800,7 @@ void tbfe_bbg_secret_key_serialize(uint8_t* serialized, tbfe_bbg_secret_key_t* s
 void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* ciphertext) {
   const unsigned ciphertext_count = vector_size(ciphertext->Cs);
 
-  write_u32(&serialized, ciphertext_count);
+  write_u8(&serialized, ciphertext_count);
   write_u32(&serialized, ciphertext->time_interval);
   for (size_t i = 0; i < ciphertext_count; ++i) {
     bbg_ciphertext_t* ct_i = vector_get(ciphertext->Cs, i);
@@ -1819,7 +1820,7 @@ void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* c
 
 unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key) {
   return BBG_PUBLIC_KEY_SIZE + bbg_get_public_params_size(&public_key->params) +
-         2 * sizeof(uint32_t);
+         sizeof(uint32_t) + sizeof(uint8_t);
 }
 
 unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
@@ -1842,8 +1843,8 @@ unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
 }
 
 unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
-  const unsigned ciphertext_count = vector_size(ciphertext->Cs);
-  return 2 * sizeof(uint32_t) + (ciphertext_count * BBG_CIPHERTEXT_SIZE) + SECURITY_PARAMETER +
+  const unsigned int ciphertext_count = vector_size(ciphertext->Cs);
+  return sizeof(uint32_t) + sizeof(uint32_t) + (ciphertext_count * BBG_CIPHERTEXT_SIZE) + SECURITY_PARAMETER +
          Ed25519_SIG_BYTES + Ed25519_KEY_BYTES;
 }
 
@@ -1911,7 +1912,7 @@ error:
  */
 int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key) {
   if (!public_key || !secret_key || !secret_key->bloom_filter.bitset.size ||
-      public_key->params.total_depth < 3) {
+      public_key->params.total_depth < 3 || secret_key->bloom_filter.hash_count > UINT8_MAX) {
     return BFE_ERROR_INVALID_PARAM;
   }
 

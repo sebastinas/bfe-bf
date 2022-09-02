@@ -30,6 +30,17 @@
 
 /* helper functions for (de)serialization */
 
+static inline void write_u8(uint8_t** dst, uint8_t v) {
+  **dst = v;
+  *dst += sizeof(v);
+}
+
+static inline uint8_t read_u8(const uint8_t** src) {
+  uint8_t v = **src;
+  *src += sizeof(v);
+  return v;
+}
+
 static inline void write_u32(uint8_t** dst, uint32_t v) {
   v = htole32(v);
   memcpy(*dst, &v, sizeof(v));
