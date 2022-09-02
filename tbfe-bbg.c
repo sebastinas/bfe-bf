@@ -203,8 +203,8 @@ static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned l
 /* unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key); */
 /* unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key); */
 /* unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext); */
-static int generate_zero_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
-                                                      unsigned int last_component);
+static int generate_one_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
+                                                     unsigned int last_component);
 static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
                               const bbg_identity_t* identity);
 /* int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key); */
@@ -1720,7 +1720,8 @@ static inline unsigned long compute_tree_size(const unsigned h) {
 /**
  * This function builds a mapping between index of nodes (time interval) and identities.
  * Currently ALL nodes in the tree are used as time interval.
- * The mapping does a pre-order traversal of the tree and assigns indices in that order.
+ * The mapping does a pre-order traversal of the tree and assigns indices in that order (left = 1;
+ * right = 2).
  *
  * @param[out] identity - the generated identity element
  * @param[in] index     - the index of one node in the tree (starting at 1)
@@ -1748,10 +1749,12 @@ static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned l
     if (node_count == index) {
       break;
     } else if (index <= (subtree_height + node_count)) {
-      buffer[length++] = 0;
+      // Take left branch
+      buffer[length++] = 1;
       ++node_count;
     } else {
-      buffer[length++] = 1;
+      // Take right branch
+      buffer[length++] = 2;
       node_count += subtree_height + 1;
     }
   }
@@ -1862,7 +1865,7 @@ unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
 }
 
 /**
- * Generates an identity element, where all elements of the identity path are set to 0, execpt the
+ * Generates an identity element, where all elements of the identity path are set to 1, execpt the
  * last one, which is set to the specfied value.
  *
  * @param[out] identity       - the identity element which shall be initialized
@@ -1872,11 +1875,13 @@ unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
-static int generate_zero_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
-                                                      unsigned int last_component) {
+static int generate_one_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
+                                                     unsigned int last_component) {
   int ret = bbg_init_identity(identity, depth);
   if (!ret) {
-    memset(identity->id, 0, sizeof(identity->id[0]) * (depth - 1));
+    for (unsigned int i = 0; i < depth - 1; i++) {
+      identity->id[i] = 1;
+    }
     identity->id[depth - 1] = last_component;
   }
   return ret;
@@ -1952,24 +1957,24 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
       goto clear_thread;
     }
 
-    // For each identity in [0, bloom_filter_size - 1] extract a secret key.
+    // For each identity in [1, bloom_filter_size] extract a secret key.
     // Static scheduling ensures that each thread is assigned one consecutive chunk of loop
     // iterations.
 #pragma omp for schedule(static)
-    for (unsigned identity = 0; identity < bloom_filter_size; ++identity) {
-      // Generate the identities 0|0, 0|1, 0|2, ..., 0|m-1.
-      bbg_identity_t identity_0i;
-      // We use identity '0i' at depth 2, since we start at depth 1 with identity '0' as first time
-      // interval! The bloom filters just add one layer to identity '0'
-      ret |= generate_zero_identity_with_last_component(&identity_0i, 2, identity);
+    for (unsigned identity = 1; identity <= bloom_filter_size; ++identity) {
+      // Generate the identities 1|1, 1|2, 1|3, ..., 1|m.
+      bbg_identity_t identity_1i;
+      // We use identity '1i' at depth 2, since we start at depth 1 with identity '1' as first time
+      // interval! The bloom filters just add one layer to identity '1'
+      ret |= generate_one_identity_with_last_component(&identity_1i, 2, identity);
       if (ret) {
         goto clear_loop;
       }
 
       // Get the bloom filter key and add it the per-thread 'secret key vector'
-      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_0i);
+      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_1i);
     clear_loop:
-      bbg_clear_identity(&identity_0i);
+      bbg_clear_identity(&identity_1i);
     }
 
     // Copy the generated secret keys from the private vectors of the threads.
@@ -1990,46 +1995,46 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
-  // Puncture sk_0 and compute keys for its children (00, 01) and for identity 1 (representing
+  // Puncture sk_0 and compute keys for its children (11, 12) and for identity 2 (representing
   // future time intervals).
-  bbg_identity_t identity_1;
-  bbg_identity_t identity_00;
-  bbg_identity_t identity_01;
+  bbg_identity_t identity_2;
+  bbg_identity_t identity_11;
+  bbg_identity_t identity_12;
 
-  result_status = bbg_init_identity(&identity_1, 1);
+  result_status = bbg_init_identity(&identity_2, 1);
   if (result_status) {
-    goto clear_identities_1;
+    goto clear_identities_2;
   }
-  identity_1.id[0] = 1;
+  identity_2.id[0] = 2;
 
-  result_status = generate_zero_identity_with_last_component(&identity_00, 2, 0);
+  result_status = generate_one_identity_with_last_component(&identity_11, 2, 1);
   if (result_status) {
-    goto clear_identities_00;
+    goto clear_identities_11;
   }
-  result_status = generate_zero_identity_with_last_component(&identity_01, 2, 1);
+  result_status = generate_one_identity_with_last_component(&identity_12, 2, 2);
   if (result_status) {
-    goto clear_identities_01;
+    goto clear_identities_12;
   }
 
   if ((result_status =
-           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_1)) ||
+           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_2)) ||
       (result_status =
-           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_00)) ||
+           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_11)) ||
       (result_status =
-           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_01))) {
-    goto clear_identities_01;
+           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_12))) {
+    goto clear_identities_12;
   }
 
   ++secret_key->next_interval;
   public_key->bloom_filter_hashes = number_hash_functions;
   public_key->bloom_filter_size   = bloom_filter_size;
 
-clear_identities_01:
-  bbg_clear_identity(&identity_01);
-clear_identities_00:
-  bbg_clear_identity(&identity_00);
-clear_identities_1:
-  bbg_clear_identity(&identity_1);
+clear_identities_12:
+  bbg_clear_identity(&identity_12);
+clear_identities_11:
+  bbg_clear_identity(&identity_11);
+clear_identities_2:
+  bbg_clear_identity(&identity_2);
 clear:
   bbg_clear_master_key(&msk);
   return result_status;
@@ -2096,7 +2101,8 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   // Derive the identities from the random c with the hash functions of the bloom filter.
   for (size_t i = 0; i < k; ++i) {
     identity_tau_i.id[tau_i_depth - 1] =
-        bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, public_key->bloom_filter_size);
+        bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, public_key->bloom_filter_size) +
+        1; // ID's start at 1
 
     bbg_ciphertext_t* ct = malloc(sizeof(*ct));
     result_status        = bbg_init_ciphertext(ct);
@@ -2186,8 +2192,8 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
 
   omp_set_lock(&secret_key->bloom_filter_mutex);
 
-  int decapsulating_identity_index = -1; // in [1..k] -> points to the right ciphertext
-  unsigned decapsulating_identity  = 0;  // in [1..m] -> points to the right bloom filter key
+  int decapsulating_identity_index = -1; // in [0..k-1] -> points to the right ciphertext
+  unsigned decapsulating_identity  = 0;  // in [0..m-1] -> points to the right bloom filter key
 
   // Derive the identities under which this ciphertext was encapsulated and mark
   // the first identity for which the secret key has not been punctured yet.
@@ -2199,7 +2205,7 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
         vector_get(secret_key->sk_bloom, hash) != NULL) {
       decapsulating_identity_index  = i;
       decapsulating_identity        = hash;
-      tau_prime.id[tau_i_depth - 1] = hash;
+      tau_prime.id[tau_i_depth - 1] = hash + 1; // ID's start at 1
       break;
     }
   }
@@ -2357,7 +2363,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
 #pragma omp parallel reduction(| : result_status)
   {
     bbg_identity_t identity_tau_i;
-    // Generate an identity to hold tau|i for i in [0,...,m].
+    // Generate an identity to hold tau|i for i in [1,...,m].
     int ret = bbg_init_identity_from(&identity_tau_i, tau_i_depth, &tau);
     if (ret) {
       goto clear_identity_tau_i;
@@ -2370,12 +2376,12 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
       goto clear_thread;
     }
 
-    // For each identity in [0, bloom_filter_size - 1] extract a secret key.
+    // For each identity in [1, bloom_filter_size] extract a secret key.
     // Static scheduling ensures that each thread is assigned one consecutive chunk of loop
     // iterations.
 #pragma omp for schedule(static)
-    for (unsigned identity = 0; identity < bloom_filter_size; ++identity) {
-      // Generate the identities tau|0, tau|1, tau|2, ..., tau|m-1.
+    for (unsigned identity = 1; identity <= bloom_filter_size; ++identity) {
+      // Generate the identities tau|1, tau|2, tau|3, ..., tau|m.
       identity_tau_i.id[tau_i_depth - 1] = identity;
       // NOTE: the keys are derived from the parent key, not from master key
       ret |= puncture_derive_key_and_add(&secret_key_private, &public_key->params, sk_tau,
@@ -2413,7 +2419,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
     }
 
     // Generate key for the left child.
-    identity_tau_i.id[tau_i_depth - 1] = 0;
+    identity_tau_i.id[tau_i_depth - 1] = 1;
     result_status = puncture_derive_key_and_add(secret_key->sk_time, &public_key->params, sk_tau,
                                                 &identity_tau_i);
     if (result_status) {
@@ -2421,7 +2427,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
     }
 
     // Generate key for the right child.
-    identity_tau_i.id[tau_i_depth - 1] = 1;
+    identity_tau_i.id[tau_i_depth - 1] = 2;
     result_status = puncture_derive_key_and_add(secret_key->sk_time, &public_key->params, sk_tau,
                                                 &identity_tau_i);
 
