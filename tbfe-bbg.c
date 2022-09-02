@@ -47,6 +47,12 @@
 /* Add offset to bloom filter index --> BF identities start at (ARITY + 1) */
 #define BF_POS_TO_BF_ID(A) (A + ARITY + 1)
 
+/* States if some BBG secret key is a bloom filter key or not */
+typedef enum {
+  BLOOM_FILTER_KEY = 0, /**< Key is of type bbg bloom filter key */
+  SECRET_KEY       = 1, /**< Key is of type bbg secret key */
+} key_type_t;
+
 /**
  * Represents a BBG HIBE identity in the tree.
  * An identity is defined by the its depth in the tree and the corresponding 0/1 (left/right child)
@@ -208,7 +214,7 @@ static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned l
 static int generate_one_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
                                                      unsigned int last_component);
 static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
-                              const bbg_identity_t* identity);
+                              const bbg_identity_t* identity, key_type_t key_type);
 /* int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key); */
 /* int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
                     tbfe_bbg_public_key_t* public_key, unsigned int time_interval); */
@@ -217,7 +223,8 @@ static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_ma
 /* int tbfe_bbg_puncture_ciphertext(tbfe_bbg_secret_key_t* secret_key,
                     tbfe_bbg_ciphertext_t* ciphertext); */
 static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* params,
-                                       bbg_secret_key_t* sk, const bbg_identity_t* identity);
+                                       bbg_secret_key_t* sk, const bbg_identity_t* identity,
+                                       key_type_t key_type);
 /* int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_public_key_t*
                     public_key, unsigned int time_interval); */
 
@@ -1874,13 +1881,16 @@ static int generate_one_identity_with_last_component(bbg_identity_t* identity, u
  * adds it to the specified vector.
  */
 static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
-                              const bbg_identity_t* identity) {
+                              const bbg_identity_t* identity, key_type_t key_type) {
   bbg_secret_key_t* sk = malloc(sizeof(*sk));
   if (!sk) {
     return BFE_ERROR;
   }
 
-  int ret = bbg_init_secret_key(sk, params->total_depth - identity->depth, identity->depth);
+  // If we want to derive a bf-key the number of delegetable levels is 1
+  int delegetable_levels =
+      (key_type == BLOOM_FILTER_KEY) ? 1 : (params->total_depth - identity->depth);
+  int ret = bbg_init_secret_key(sk, delegetable_levels, identity->depth);
   if (ret) {
     goto error;
   }
@@ -1954,7 +1964,8 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
       }
 
       // Get the bloom filter key and add it the per-thread 'secret key vector'
-      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_1i);
+      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_1i,
+                                BLOOM_FILTER_KEY);
     clear_loop:
       bbg_clear_identity(&identity_1i);
     }
@@ -1988,8 +1999,8 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
   }
   for (size_t i = 2; i <= ARITY; i++) {
     identity_i.id[0] = i;
-    if ((result_status =
-             derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_i))) {
+    if ((result_status = derive_key_and_add(secret_key->sk_time, &public_key->params, &msk,
+                                            &identity_i, SECRET_KEY))) {
       goto clear_identity_i;
     }
   }
@@ -2002,8 +2013,8 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
   }
   for (size_t i = 1; i <= ARITY; i++) {
     identity_1i.id[1] = i;
-    if ((result_status =
-             derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_1i))) {
+    if ((result_status = derive_key_and_add(secret_key->sk_time, &public_key->params, &msk,
+                                            &identity_1i, SECRET_KEY))) {
       goto clear_identity_1i;
     }
   }
@@ -2268,13 +2279,17 @@ int tbfe_bbg_puncture_ciphertext(tbfe_bbg_secret_key_t* secret_key,
  * The parent node is represented by the secrety key of the parent identity.
  */
 static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* params,
-                                       bbg_secret_key_t* sk, const bbg_identity_t* identity) {
+                                       bbg_secret_key_t* sk, const bbg_identity_t* identity,
+                                       key_type_t key_type) {
   bbg_secret_key_t* sknew = malloc(sizeof(*sknew));
   if (!sknew) {
     return BFE_ERROR;
   }
 
-  int ret = bbg_init_secret_key(sknew, params->total_depth - identity->depth, identity->depth);
+  // If we want to derive a bf-key the number of delegetable levels is 1
+  int delegetable_levels =
+      (key_type == BLOOM_FILTER_KEY) ? 1 : (params->total_depth - identity->depth);
+  int ret = bbg_init_secret_key(sknew, delegetable_levels, identity->depth);
   if (ret) {
     goto clear;
   }
@@ -2369,7 +2384,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
       identity_tau_i.id[tau_i_depth - 1] = BF_POS_TO_BF_ID(pos);
       // NOTE: the keys are derived from the parent key, not from master key
       ret |= puncture_derive_key_and_add(&secret_key_private, &public_key->params, sk_tau,
-                                         &identity_tau_i);
+                                         &identity_tau_i, BLOOM_FILTER_KEY);
     }
 
     // Copy the generated secret keys from the private vectors of the threads.
@@ -2406,7 +2421,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
     for (size_t i = 1; i <= ARITY; i++) {
       identity_tau_i.id[tau_i_depth - 1] = i;
       result_status = puncture_derive_key_and_add(secret_key->sk_time, &public_key->params, sk_tau,
-                                                  &identity_tau_i);
+                                                  &identity_tau_i, SECRET_KEY);
       if (result_status) {
         goto clear_leaf;
       }
