@@ -88,9 +88,8 @@ typedef struct {
  * @internal
  */
 typedef struct {
-  unsigned max_delegatable_depth; /**< The max_delegatable_depth is the maximal number of possible
-                                     key delegations. This includes the bloom filter level (e.g.
-                                     tree height + 1), but not the additional CHK delegation. */
+  unsigned total_depth; /**< The total_depth of the interval tree, including bloom filter and CHK
+                           level */
   g1_t g;
   g2_t g_hat;
   g1_t g2;

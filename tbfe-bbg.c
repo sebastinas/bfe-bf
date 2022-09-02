@@ -14,11 +14,7 @@
 
 /*
  * The code contains different definitions of the tree height (or depth), which are explained here:
- *  - max_delegatable_depth   : Number of levels for key delegation (includes bloom filter keys).
- *  - total_depth             : Height of the tree including bloom filter keys and CHK signature -->
- * equal to 'max_delegatable_depth + 1'.
- *
- * Following definitions are used together with some specific identity ID at depth d.
+ *  - total_depth             : Height of the tree including bloom filter keys and CHK signature
  *  - num_delegatable_levels  : Number of levels for further key delegation of subtree with ID as
  * root --> equal to 'total_depth - ID.depth'. This variable refers to the number of b_i (basis)
  * elements as part of some BBG secret key (cmp. BBG HIBE key generation).
@@ -461,7 +457,7 @@ static unsigned bbg_get_secret_key_size(const bbg_secret_key_t* secret_key) {
 
 static unsigned bbg_get_public_params_size(const bbg_public_params_t* public_params) {
   return G2_SIZE_COMPRESSED + 3 * G1_SIZE_COMPRESSED + sizeof(uint32_t) +
-         (public_params->max_delegatable_depth + 1) * G1_SIZE_COMPRESSED;
+         (public_params->total_depth) * G1_SIZE_COMPRESSED;
 }
 ///@}
 
@@ -598,8 +594,8 @@ static int bbg_init_public_params(bbg_public_params_t* params, unsigned int dept
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  params->max_delegatable_depth = depth - 1;
-  params->h                     = calloc(depth, sizeof(*params->h));
+  params->total_depth = depth;
+  params->h           = calloc(depth, sizeof(*params->h));
   params->h_precomputation_tables =
       calloc(depth * RLC_EP_TABLE, sizeof(*params->h_precomputation_tables));
   if (!params->h || !params->h_precomputation_tables) {
@@ -644,7 +640,7 @@ static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  const unsigned int depth = read_u32(&serialized) + 1;
+  const unsigned int depth = read_u32(&serialized);
   if (bbg_init_public_params(params, depth) != BFE_SUCCESS) {
     return BFE_ERROR;
   }
@@ -656,7 +652,7 @@ static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
     read_g1(params->g2, &serialized);
     read_g1(params->g3, &serialized);
 
-    for (size_t i = 0; i < params->max_delegatable_depth + 1; ++i) {
+    for (size_t i = 0; i < params->total_depth; ++i) {
       read_g1(params->h[i], &serialized);
       g1_mul_pre(params->h_precomputation_tables + i * RLC_EP_TABLE, params->h[i]);
     }
@@ -758,13 +754,13 @@ static void bbg_serialize_ciphertext(uint8_t* serialized, bbg_ciphertext_t* ciph
 }
 
 static void bbg_serialize_public_params(uint8_t* serialized, bbg_public_params_t* public_params) {
-  write_u32(&serialized, public_params->max_delegatable_depth);
+  write_u32(&serialized, public_params->total_depth);
   write_g1(&serialized, public_params->g);
   write_g2(&serialized, public_params->g_hat);
   write_g1(&serialized, public_params->g2);
   write_g1(&serialized, public_params->g3);
 
-  for (size_t i = 0; i < public_params->max_delegatable_depth + 1; ++i) {
+  for (size_t i = 0; i < public_params->total_depth; ++i) {
     write_g1(&serialized, public_params->h[i]);
   }
 }
@@ -864,20 +860,20 @@ static void bbg_clear_public_params(bbg_public_params_t* params) {
     g1_free(params->g2);
     g1_free(params->g3);
     if (params->h_precomputation_tables) {
-      for (size_t i = 0; i < (params->max_delegatable_depth + 1) * RLC_EP_TABLE; ++i) {
+      for (size_t i = 0; i < (params->total_depth) * RLC_EP_TABLE; ++i) {
         g1_free(params->h_precomputation_tables[i]);
       }
       free(params->h_precomputation_tables);
       params->h_precomputation_tables = NULL;
     }
     if (params->h) {
-      for (size_t i = 0; i < params->max_delegatable_depth + 1; ++i) {
+      for (size_t i = 0; i < params->total_depth; ++i) {
         g1_free(params->h[i]);
       }
       free(params->h);
       params->h = NULL;
     }
-    params->max_delegatable_depth = 0;
+    params->total_depth = 0;
   }
 }
 
@@ -961,12 +957,12 @@ static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
   // Public key
   hash_update_gt(ctx, public_key->pk.pk);
   // Public parameter
-  hash_update_u32(ctx, public_key->params.max_delegatable_depth);
+  hash_update_u32(ctx, public_key->params.total_depth);
   hash_update_g1(ctx, public_key->params.g);
   hash_update_g2(ctx, public_key->params.g_hat);
   hash_update_g1(ctx, public_key->params.g2);
   hash_update_g1(ctx, public_key->params.g3);
-  for (size_t i = 0; i < public_key->params.max_delegatable_depth + 1; i++) {
+  for (size_t i = 0; i < public_key->params.total_depth; i++) {
     hash_update_g1(ctx, public_key->params.h[i]);
   }
 }
@@ -1086,7 +1082,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
     // Master key mk = g_2^alpha
     g1_mul(master_key->mk, public_params->g2, alpha);
 
-    public_params->max_delegatable_depth = total_depth - 1;
+    public_params->total_depth = total_depth;
   }
   // Clean up if errors occured
   RLC_CATCH_ANY {
@@ -1438,8 +1434,8 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
                                           bbg_public_params_t* public_params) {
 
   // Sanity check, if parent_secret_key is actually derived from a parent node of the given identity
-  const unsigned total_depth  = public_params->max_delegatable_depth + 1;
-  const unsigned parent_depth = total_depth - parent_secret_key->num_delegatable_levels;
+  const unsigned parent_depth =
+      public_params->total_depth - parent_secret_key->num_delegatable_levels;
   if (parent_depth != (identity->depth - 1)) {
     return BFE_ERROR_INVALID_PARAM;
   }
@@ -1924,7 +1920,7 @@ error:
  */
 int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key) {
   if (!public_key || !secret_key || !secret_key->bloom_filter.bitset.size ||
-      public_key->params.max_delegatable_depth < 2) {
+      public_key->params.total_depth < 3) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
@@ -1934,7 +1930,7 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
-  const unsigned int total_levels          = public_key->params.max_delegatable_depth - 1;
+  const unsigned int total_levels          = public_key->params.total_depth - 2;
   const unsigned int number_hash_functions = secret_key->bloom_filter.hash_count;
   const unsigned int bloom_filter_size     = secret_key->bloom_filter.bitset.size;
 
@@ -2058,7 +2054,7 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   // which the message shall be encrypted
   bbg_identity_t tau = {0, NULL};
   int result_status =
-      tbfe_bbg_index_to_identity(&tau, time_interval, public_key->params.max_delegatable_depth - 1);
+      tbfe_bbg_index_to_identity(&tau, time_interval, public_key->params.total_depth - 2);
   if (result_status) {
     goto clear_tau;
   }
@@ -2173,7 +2169,7 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   // Get the identity of the current time interval and store it in 'tau'
   bbg_identity_t tau = {0, NULL};
   int result_status  = tbfe_bbg_index_to_identity(&tau, secret_key->next_interval - 1,
-                                                 public_key->params.max_delegatable_depth - 1);
+                                                 public_key->params.total_depth - 2);
   if (result_status) {
     result_status = BFE_ERROR;
     goto clear_tau;
@@ -2297,8 +2293,7 @@ static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* param
     return BFE_ERROR;
   }
 
-  int ret = bbg_init_secret_key(sknew, params->max_delegatable_depth + 1 - identity->depth,
-                                identity->depth);
+  int ret = bbg_init_secret_key(sknew, params->total_depth - identity->depth, identity->depth);
   if (ret) {
     goto clear;
   }
@@ -2331,7 +2326,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
   // NOTE: 'time_interval' refers to the next epoch,
   // therefore tau contains the identity of the new time interval
   bbg_identity_t tau   = {0, NULL};
-  const unsigned int t = public_key->params.max_delegatable_depth - 1;
+  const unsigned int t = public_key->params.total_depth - 2;
   int result_status    = tbfe_bbg_index_to_identity(&tau, time_interval, t);
   if (result_status) {
     goto clear_tau;
@@ -2476,11 +2471,11 @@ static bool bbg_public_keys_are_equal(bbg_public_key_t* l, bbg_public_key_t* r) 
 static bool bbg_public_params_are_equal(bbg_public_params_t* l, bbg_public_params_t* r) {
   if (g1_cmp(l->g, r->g) != RLC_EQ || g2_cmp(l->g_hat, r->g_hat) != RLC_EQ ||
       g1_cmp(l->g2, r->g2) != RLC_EQ || g1_cmp(l->g3, r->g3) != RLC_EQ ||
-      l->max_delegatable_depth != r->max_delegatable_depth) {
+      l->total_depth != r->total_depth) {
     return false;
   }
 
-  for (size_t i = 0; i < l->max_delegatable_depth; ++i) {
+  for (size_t i = 0; i < l->total_depth; ++i) {
     if (g1_cmp(l->h[i], r->h[i]) != RLC_EQ) {
       return false;
     }
