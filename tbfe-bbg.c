@@ -1186,9 +1186,7 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
   }
 
   bn_t u;
-  bn_t w;
   bn_null(u);
-  bn_null(w);
 
   // Create arrays of size 2 to use for 'pc_map_sim' function
   g1_t g1s[2];
@@ -1200,7 +1198,6 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
 
   RLC_TRY {
     bn_new(u);
-    bn_new(w);
     g1_new(g1s[0]);
     g1_new(g1s[1]);
     g2_new(g2s[0]);
@@ -1209,9 +1206,6 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
     // u = H(VERIFICATION_PREFIX | eddsa_pk) --> generate hash of eddsa public key to verify CHK
     // signature
     bbg_hash_eddsa_pk(u, eddsa_pk);
-
-    // Choose a random w from Z_p^*.
-    zp_rand(w);
 
     // g1s[0] = (h_1^I_1 * ... * h_k^I_k * g_3)
     g1_copy(g1s[0], public_params->g3);
@@ -1227,8 +1221,10 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
     g1_mul_fix(g1s[1], &public_params->h_precomputation_tables[identity->depth * RLC_EP_TABLE], u);
     g1_add(g1s[0], g1s[0], g1s[1]);
 
+    // assume w=1
     // g1s[1] = (g1s[0]^w * b_k^u * a0')^-1 ==> a0 of new sk
-    g1_mul_sim(g1s[1], g1s[0], w, secret_key->b[0], u);
+    g1_mul(g1s[1], secret_key->b[0], u);
+    g1_add(g1s[1], g1s[0], g1s[1]);
     g1_add(g1s[1], secret_key->a0, g1s[1]);
     g1_neg(g1s[1], g1s[1]); // ^-1 --> divide
     // g2s[1] = B
@@ -1236,8 +1232,7 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
     // g1s[0] = C
     g1_copy(g1s[0], ciphertext->c);
     // g2s[0] = g^w * a1' ==> a1 of new sk
-    g2_mul(g2s[0], public_params->g_hat, w);
-    g2_add(g2s[0], g2s[0], secret_key->a1);
+    g2_add(g2s[0], public_params->g_hat, secret_key->a1);
 
     // key = e(g1s[0], g2s[0]) * e(g1s[1]. g2s[1])
     pc_map_sim(key->k, g1s, g2s, 2);
@@ -1252,7 +1247,6 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
     g2_free(g2s[0]);
     g1_free(g1s[1]);
     g1_free(g1s[0]);
-    bn_free(w);
     bn_free(u);
   }
 
