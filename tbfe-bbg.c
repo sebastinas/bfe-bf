@@ -98,7 +98,6 @@ typedef struct {
 } bbg_ciphertext_t;
 
 /* Prefixes for hash function to achieve domain separation */
-static const uint8_t IDENTITY_PREFIX     = 2;
 static const uint8_t SIGNATURE_PREFIX    = 3;
 static const uint8_t VERIFICATION_PREFIX = 4;
 
@@ -151,7 +150,6 @@ static void bbg_clear_public_params(bbg_public_params_t* params);
 static void bbg_clear_master_key(bbg_master_key_t* mk);
 static void bbg_clear_key(bbg_key_t* key);
 // ## HASHING
-static void bbg_hash_id(bn_t hashed_id, const unsigned id, const unsigned prefix);
 static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk);
 static void hash_update_u32(Keccak_HashInstance* ctx, uint32_t v);
 static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
@@ -899,23 +897,6 @@ static void bbg_clear_key(bbg_key_t* key) {
  * To create domain separation different prefixes shall be used for different data.
  */
 ///@{
-
-/**
- * This function generates the hash of some unsigned integer.
- */
-static void bbg_hash_id(bn_t hashed_id, const unsigned id, const unsigned prefix) {
-  // Fix the endiness of the input parameter, so it is the same for different devices
-  const uint32_t prefix_u32 = htole32(prefix);
-  const uint32_t id_u32     = htole32(id);
-
-  Keccak_HashInstance ctx;
-  Keccak_HashInitialize_SHAKE128(&ctx);
-  Keccak_HashUpdate(&ctx, (const uint8_t*)&prefix_u32, sizeof(prefix_u32) * 8);
-  Keccak_HashUpdate(&ctx, (const uint8_t*)&id_u32, sizeof(id_u32) * 8);
-  Keccak_HashFinal(&ctx, NULL);
-  hash_squeeze_zp(hashed_id, &ctx);
-}
-
 /**
  * Generates the SHA3 hash of the public key of the given EdDSA key pair
  *
