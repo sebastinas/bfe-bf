@@ -223,12 +223,10 @@ namespace {
     auto pk_leaf = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
     /* generate keys and puncture 'leaf secret key' 10 times */
     tbfe_bbg_keygen(pk_leaf.get(), sk_leaf.get());
-    for (unsigned int i = 2; i <= 10; i++)
-    {
+    for (unsigned int i = 2; i <= 10; i++) {
       tbfe_bbg_puncture_interval(sk_leaf.get(), pk_leaf.get(), i);
     }
-    
-    
+
     /* benchmark key generation */
     auto start_time = high_resolution_clock::now();
     tbfe_bbg_keygen(pk.get(), sk.get());
@@ -325,7 +323,7 @@ namespace {
     std::cout << "tbfe decaps (+ ser):  "
               << duration_cast<microseconds>(decaps_serialize_time / REPEATS).count() << " µs - "
               << beautify_duration(decaps_serialize_time / REPEATS) << std::endl;
-    
+
      /* benchmark decaps leaf */
     nanoseconds decaps_leaf_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
