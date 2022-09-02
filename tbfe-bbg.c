@@ -162,7 +162,7 @@ static void hash_update_bbg_ciphertexts(Keccak_HashInstance* ctx, vector_t* ciph
 static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
                                              const bbg_identity_t* identity);
 static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
-                     bbg_public_params_t* public_params, const unsigned total_depth);
+                     bbg_public_params_t* public_params);
 static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
                            bbg_secret_key_t* secret_key, eddsa_pk_t* eddsa_pk,
                            bbg_public_params_t* public_params, const bbg_identity_t* identity);
@@ -206,7 +206,7 @@ static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned l
 static int generate_zero_identity_with_last_component(bbg_identity_t* identity, unsigned int depth,
                                                       unsigned int last_component);
 static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
-                              const bbg_identity_t* identity, unsigned int total_depth);
+                              const bbg_identity_t* identity);
 /* int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* secret_key); */
 /* int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
                     tbfe_bbg_public_key_t* public_key, unsigned int time_interval); */
@@ -1040,13 +1040,11 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
  * @param[out] master_key     - the generated master key used for key derivation
  * @param[out] public_key     - the generated public key
  * @param[out] public_params  - the generated public parameter set
- * @param[in] total_depth     - the total depth of the interval tree (includes two layers for bloom
- * filter keys and CHK signature)
  *
  * @return BFE_SUCESS if no errors occur, an error code otherwise
  */
 static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
-                     bbg_public_params_t* public_params, const unsigned total_depth) {
+                     bbg_public_params_t* public_params) {
   int result_status = BFE_SUCCESS;
 
   // Create new group elements and initialize those
@@ -1068,7 +1066,7 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
 
     // Initialize the precomputation table of h_1, ..., h_l with the values of h_1, ..., h_l.
     // Note that the precomp-table is used for faster exponatiation
-    for (size_t i = 0; i < total_depth; ++i) {
+    for (size_t i = 0; i < public_params->total_depth; ++i) {
       g1_rand(public_params->h[i]);
       g1_mul_pre(public_params->h_precomputation_tables + i * RLC_EP_TABLE, public_params->h[i]);
     }
@@ -1081,8 +1079,6 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
     pc_map(public_key->pk, public_params->g2, original_public_key_pk);
     // Master key mk = g_2^alpha
     g1_mul(master_key->mk, public_params->g2, alpha);
-
-    public_params->total_depth = total_depth;
   }
   // Clean up if errors occured
   RLC_CATCH_ANY {
@@ -1531,6 +1527,10 @@ int tbfe_bbg_init_public_key(tbfe_bbg_public_key_t* public_key, unsigned int tot
     return BFE_ERROR_INVALID_PARAM;
   }
 
+  // We want to have a t + 1 level HIBE (where t are the total-levels of the tree), but due to CHK
+  // compiler approach used in the CCA secure variant of BBG-HIBE, we need to setup with t + 2.
+  // Therefore 'total_depth' shall be set to 't + 2'.
+
   public_key->bloom_filter_hashes = 0;
   public_key->bloom_filter_size   = 0;
 
@@ -1887,13 +1887,13 @@ static int generate_zero_identity_with_last_component(bbg_identity_t* identity, 
  * adds it to the specified vector.
  */
 static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_master_key_t* msk,
-                              const bbg_identity_t* identity, unsigned int total_depth) {
+                              const bbg_identity_t* identity) {
   bbg_secret_key_t* sk = malloc(sizeof(*sk));
   if (!sk) {
     return BFE_ERROR;
   }
 
-  int ret = bbg_init_secret_key(sk, total_depth - identity->depth, identity->depth);
+  int ret = bbg_init_secret_key(sk, params->total_depth - identity->depth, identity->depth);
   if (ret) {
     goto error;
   }
@@ -1930,17 +1930,12 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
-  const unsigned int total_levels          = public_key->params.total_depth - 2;
   const unsigned int number_hash_functions = secret_key->bloom_filter.hash_count;
   const unsigned int bloom_filter_size     = secret_key->bloom_filter.bitset.size;
-
-  // We want to have a t + 1 level HIBE, but due to CHK compiler approach
-  // used in the CCA secure variant of BBG-HIBE, we need to setup with t + 2.
-  const unsigned total_depth = total_levels + 2;
-  secret_key->next_interval  = 1;
+  secret_key->next_interval                = 1;
 
   // Generate master secret key and public key for BBG HIBE scheme.
-  result_status = bbg_setup(&msk, &public_key->pk, &public_key->params, total_depth);
+  result_status = bbg_setup(&msk, &public_key->pk, &public_key->params);
   if (result_status) {
     goto clear;
   }
@@ -1972,8 +1967,7 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
       }
 
       // Get the bloom filter key and add it the per-thread 'secret key vector'
-      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_0i,
-                                total_depth);
+      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_0i);
     clear_loop:
       bbg_clear_identity(&identity_0i);
     }
@@ -2017,12 +2011,12 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear_identities_01;
   }
 
-  if ((result_status = derive_key_and_add(secret_key->sk_time, &public_key->params, &msk,
-                                          &identity_1, total_depth)) ||
-      (result_status = derive_key_and_add(secret_key->sk_time, &public_key->params, &msk,
-                                          &identity_00, total_depth)) ||
-      (result_status = derive_key_and_add(secret_key->sk_time, &public_key->params, &msk,
-                                          &identity_01, total_depth))) {
+  if ((result_status =
+           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_1)) ||
+      (result_status =
+           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_00)) ||
+      (result_status =
+           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_01))) {
     goto clear_identities_01;
   }
 
