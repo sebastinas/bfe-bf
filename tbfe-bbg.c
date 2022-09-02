@@ -1687,7 +1687,7 @@ void tbfe_bbg_clear_ciphertext(tbfe_bbg_ciphertext_t* ciphertext) {
 }
 
 /**
- * Calculates the  size of a binary tree with height (depth) h-1 (root is at level 1).
+ * Calculates the  size of a n-ary tree with height (depth) h-1 (root is at level 1).
  * E.g.: tree with height h = 2 --> 2^3-1 = 7 nodes
  *      o
  *     / \
@@ -1696,7 +1696,7 @@ void tbfe_bbg_clear_ciphertext(tbfe_bbg_ciphertext_t* ciphertext) {
  *  o   oo  o
  */
 static inline unsigned long compute_tree_size(const unsigned h) {
-  return (2ul << h) - 1;
+  return ((pow(ARITY, h + 1) - 1) / (ARITY - 1));
 }
 
 /**
@@ -1725,19 +1725,19 @@ static int tbfe_bbg_index_to_identity(bbg_identity_t* identity, const unsigned l
   unsigned long node_count = 0;
   size_t length            = 0;
 
-  // traverse tree in pre-order --> (root -> left -> right)
+  // traverse tree in pre-order --> e.g. root -> left -> ... -> right
   for (size_t level = 0; level < height; ++level) {
     unsigned long subtree_height = compute_tree_size(height - level - 1);
     if (node_count == index) {
       break;
-    } else if (index <= (subtree_height + node_count)) {
-      // Take left branch
-      buffer[length++] = 1;
-      ++node_count;
-    } else {
-      // Take right branch
-      buffer[length++] = 2;
-      node_count += subtree_height + 1;
+    }
+    // Check in which subtree the indexed node can be found
+    for (size_t i = 1; i <= ARITY; i++) {
+      if (index <= (i * subtree_height + node_count)) {
+        buffer[length++] = i;
+        node_count += (i - 1) * subtree_height + 1;
+        break;
+      }
     }
   }
 
@@ -1977,46 +1977,45 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
     goto clear;
   }
 
-  // Puncture sk_0 and compute keys for its children (11, 12) and for identity 2 (representing
-  // future time intervals).
-  bbg_identity_t identity_2;
-  bbg_identity_t identity_11;
-  bbg_identity_t identity_12;
+  // Puncture sk_0 and compute keys for its n children (11, 12, ..., 1n) and
+  // for its n-1 neighbouring identities 2,..,n (e.g. next time intervals).
 
-  result_status = bbg_init_identity(&identity_2, 1);
+  // Generate key for all n-1 neighbors
+  bbg_identity_t identity_i;
+  result_status = bbg_init_identity(&identity_i, 1);
   if (result_status) {
-    goto clear_identities_2;
+    goto clear_identity_i;
   }
-  identity_2.id[0] = 2;
-
-  result_status = generate_one_identity_with_last_component(&identity_11, 2, 1);
-  if (result_status) {
-    goto clear_identities_11;
-  }
-  result_status = generate_one_identity_with_last_component(&identity_12, 2, 2);
-  if (result_status) {
-    goto clear_identities_12;
+  for (size_t i = 2; i <= ARITY; i++) {
+    identity_i.id[0] = i;
+    if ((result_status =
+             derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_i))) {
+      goto clear_identity_i;
+    }
   }
 
-  if ((result_status =
-           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_2)) ||
-      (result_status =
-           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_11)) ||
-      (result_status =
-           derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_12))) {
-    goto clear_identities_12;
+  // Generate key for all n childs
+  bbg_identity_t identity_1i;
+  result_status = generate_one_identity_with_last_component(&identity_1i, 2, 0);
+  if (result_status) {
+    goto clear_identity_1i;
+  }
+  for (size_t i = 1; i <= ARITY; i++) {
+    identity_1i.id[1] = i;
+    if ((result_status =
+             derive_key_and_add(secret_key->sk_time, &public_key->params, &msk, &identity_1i))) {
+      goto clear_identity_1i;
+    }
   }
 
   ++secret_key->next_interval;
   public_key->bloom_filter_hashes = number_hash_functions;
   public_key->bloom_filter_size   = bloom_filter_size;
 
-clear_identities_12:
-  bbg_clear_identity(&identity_12);
-clear_identities_11:
-  bbg_clear_identity(&identity_11);
-clear_identities_2:
-  bbg_clear_identity(&identity_2);
+clear_identity_1i:
+  bbg_clear_identity(&identity_1i);
+clear_identity_i:
+  bbg_clear_identity(&identity_i);
 clear:
   bbg_clear_master_key(&msk);
   return result_status;
@@ -2403,18 +2402,15 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
       goto clear_leaf;
     }
 
-    // Generate key for the left child.
-    identity_tau_i.id[tau_i_depth - 1] = 1;
-    result_status = puncture_derive_key_and_add(secret_key->sk_time, &public_key->params, sk_tau,
-                                                &identity_tau_i);
-    if (result_status) {
-      goto clear_leaf;
+    // Generate key for all n children
+    for (size_t i = 1; i <= ARITY; i++) {
+      identity_tau_i.id[tau_i_depth - 1] = i;
+      result_status = puncture_derive_key_and_add(secret_key->sk_time, &public_key->params, sk_tau,
+                                                  &identity_tau_i);
+      if (result_status) {
+        goto clear_leaf;
+      }
     }
-
-    // Generate key for the right child.
-    identity_tau_i.id[tau_i_depth - 1] = 2;
-    result_status = puncture_derive_key_and_add(secret_key->sk_time, &public_key->params, sk_tau,
-                                                &identity_tau_i);
 
   clear_leaf:
     bbg_clear_identity(&identity_tau_i);
