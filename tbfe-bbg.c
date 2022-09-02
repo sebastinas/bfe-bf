@@ -42,6 +42,10 @@
 #define BBG_CIPHERTEXT_SIZE (G1_SIZE_COMPRESSED + G2_SIZE_COMPRESSED + GT_SIZE_COMPRESSED)
 /* BBG public key consists of one group element*/
 #define BBG_PUBLIC_KEY_SIZE GT_SIZE_COMPRESSED
+/* Set arity N of the interval tree */
+#define ARITY 2
+/* Add offset to bloom filter index --> BF identities start at (ARITY + 1) */
+#define BF_POS_TO_BF_ID(A) (A + ARITY + 1)
 
 /**
  * Represents a BBG HIBE identity in the tree.
@@ -1935,16 +1939,16 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
       goto clear_thread;
     }
 
-    // For each identity in [1, bloom_filter_size] extract a secret key.
+    // For each position in [0, bloom_filter_size-1] extract a secret key.
     // Static scheduling ensures that each thread is assigned one consecutive chunk of loop
     // iterations.
 #pragma omp for schedule(static)
-    for (unsigned identity = 1; identity <= bloom_filter_size; ++identity) {
-      // Generate the identities 1|1, 1|2, 1|3, ..., 1|m.
+    for (unsigned pos = 0; pos < bloom_filter_size; ++pos) {
+      // Generate the identities 1|(1+n), 1|(2+n), 1|(3+n), ..., 1|(m+n), where n is the tree arity.
       bbg_identity_t identity_1i;
       // We use identity '1i' at depth 2, since we start at depth 1 with identity '1' as first time
       // interval! The bloom filters just add one layer to identity '1'
-      ret |= generate_one_identity_with_last_component(&identity_1i, 2, identity);
+      ret |= generate_one_identity_with_last_component(&identity_1i, 2, BF_POS_TO_BF_ID(pos));
       if (ret) {
         goto clear_loop;
       }
@@ -2078,9 +2082,8 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   const unsigned int k = public_key->bloom_filter_hashes;
   // Derive the identities from the random c with the hash functions of the bloom filter.
   for (size_t i = 0; i < k; ++i) {
-    identity_tau_i.id[tau_i_depth - 1] =
-        bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, public_key->bloom_filter_size) +
-        1; // ID's start at 1
+    int pos = bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, public_key->bloom_filter_size);
+    identity_tau_i.id[tau_i_depth - 1] = BF_POS_TO_BF_ID(pos);
 
     bbg_ciphertext_t* ct = malloc(sizeof(*ct));
     result_status        = bbg_init_ciphertext(ct);
@@ -2181,9 +2184,10 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
         bf_get_position(i, ciphertext->c, SECURITY_PARAMETER, secret_key->bloom_filter.bitset.size);
     if (bitset_get(&secret_key->bloom_filter.bitset, hash) == 0 &&
         vector_get(secret_key->sk_bloom, hash) != NULL) {
-      decapsulating_identity_index  = i;
-      decapsulating_identity        = hash;
-      tau_prime.id[tau_i_depth - 1] = hash + 1; // ID's start at 1
+      decapsulating_identity_index = i;
+      decapsulating_identity       = hash;
+      tau_prime.id[tau_i_depth - 1] =
+          BF_POS_TO_BF_ID(hash); // ID's start at n + 1, where n is the tree arity
       break;
     }
   }
@@ -2343,7 +2347,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
 #pragma omp parallel reduction(| : result_status)
   {
     bbg_identity_t identity_tau_i;
-    // Generate an identity to hold tau|i for i in [1,...,m].
+    // Generate an identity to hold tau|i for i in [1+n,...,m+n], where n is the tree arity.
     int ret = bbg_init_identity_from(&identity_tau_i, tau_i_depth, &tau);
     if (ret) {
       goto clear_identity_tau_i;
@@ -2356,13 +2360,14 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
       goto clear_thread;
     }
 
-    // For each identity in [1, bloom_filter_size] extract a secret key.
+    // For each position in [0, bloom_filter_size-1] extract a secret key.
     // Static scheduling ensures that each thread is assigned one consecutive chunk of loop
     // iterations.
 #pragma omp for schedule(static)
-    for (unsigned identity = 1; identity <= bloom_filter_size; ++identity) {
-      // Generate the identities tau|1, tau|2, tau|3, ..., tau|m.
-      identity_tau_i.id[tau_i_depth - 1] = identity;
+    for (unsigned pos = 0; pos < bloom_filter_size; ++pos) {
+      // Generate the identities tau|(1+n), tau|(2+n), tau|(3+n), ..., tau|(m+n), where n is the
+      // tree arity.
+      identity_tau_i.id[tau_i_depth - 1] = BF_POS_TO_BF_ID(pos);
       // NOTE: the keys are derived from the parent key, not from master key
       ret |= puncture_derive_key_and_add(&secret_key_private, &public_key->params, sk_tau,
                                          &identity_tau_i);
