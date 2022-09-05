@@ -191,9 +191,9 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
                                              const bbg_identity_t* identity);
 static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
                      bbg_public_params_t* public_params);
-static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
-                           bbg_secret_key_t* secret_key, eddsa_pk_t* eddsa_pk,
-                           bbg_public_params_t* public_params, const bbg_identity_t* identity);
+static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext, bbg_bf_key_t* bf_key,
+                           eddsa_pk_t* eddsa_pk, bbg_public_params_t* public_params,
+                           const bbg_identity_t* identity);
 static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_public_key_t* public_key,
                            eddsa_pk_t* eddsa_pk, bbg_public_params_t* public_params,
                            const bbg_identity_t* identity);
@@ -1252,16 +1252,16 @@ clean:
  *
  * @param[out] key            - the received decapsulated key (or the secret)
  * @param[in] ciphertext      - the given BBG ciphertext which shall be decapsulated
- * @param[in] secret_key      - the secret key used to decapsulate the ciphertext
+ * @param[in] bf_key          - the secret BF key used to decapsulate the ciphertext
  * @param[in] eddsa_pk        - the EdDSA public key
  * @param[in] public_params   - the public parameter set of the BBG HIBE
  * @param[in] identity        - the identity for which the message was encapsulated
  *
  * @return BFE_SUCCESS if no error occurs, an error code otherwise
  */
-static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
-                           bbg_secret_key_t* secret_key, eddsa_pk_t* eddsa_pk,
-                           bbg_public_params_t* public_params, const bbg_identity_t* identity) {
+static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext, bbg_bf_key_t* bf_key,
+                           eddsa_pk_t* eddsa_pk, bbg_public_params_t* public_params,
+                           const bbg_identity_t* identity) {
   bn_t* identity_zp_vector = calloc(sizeof(*identity_zp_vector), identity->depth);
   if (!identity_zp_vector) {
     return BFE_ERROR;
@@ -1300,7 +1300,6 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
                  identity_zp_vector[i]);
       g1_add(g1s[0], g1s[0], g1s[1]);
     }
-    // g1_copy(g1s[0], secret_key->associated_id); // --> also possible instead of for-loop
 
     // ## generate new sk for identity eddsa_pk (CHK)
     // g1s[0] = g1s[0] * h_{k+1}^u
@@ -1309,16 +1308,16 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext,
 
     // assume w=1
     // g1s[1] = (g1s[0]^w * b_k^u * a0')^-1 ==> a0 of new sk
-    g1_mul(g1s[1], secret_key->b[0], u);
+    g1_mul(g1s[1], bf_key->b, u);
     g1_add(g1s[1], g1s[0], g1s[1]);
-    g1_add(g1s[1], secret_key->a0, g1s[1]);
+    g1_add(g1s[1], bf_key->a0, g1s[1]);
     g1_neg(g1s[1], g1s[1]); // ^-1 --> divide
     // g2s[1] = B
     g2_copy(g2s[1], ciphertext->b);
     // g1s[0] = C
     g1_copy(g1s[0], ciphertext->c);
     // g2s[0] = g^w * a1' ==> a1 of new sk
-    g2_add(g2s[0], public_params->g_hat, secret_key->a1);
+    g2_add(g2s[0], public_params->g_hat, bf_key->a1);
 
     // key = e(g1s[0], g2s[0]) * e(g1s[1]. g2s[1])
     pc_map_sim(key->k, g1s, g2s, 2);
@@ -1671,13 +1670,13 @@ int tbfe_bbg_secret_key_deserialize(tbfe_bbg_secret_key_t* secret_key, const uin
   secret_key->sk_time  = vector_new(sk_time_count);
 
   for (size_t i = 0; i < sk_bloom_count; ++i) {
-    const unsigned int sk_size = read_u32(&src);
-    if (!sk_size) {
+    const unsigned int exists = read_u8(&src);
+    if (!exists) {
       vector_add(secret_key->sk_bloom, NULL);
     } else {
-      bbg_secret_key_t* sk_bloom_i = malloc(sizeof(*sk_bloom_i));
-      bbg_deserialize_secret_key(sk_bloom_i, src);
-      src += sk_size;
+      bbg_bf_key_t* sk_bloom_i = malloc(sizeof(*sk_bloom_i));
+      bbg_deserialize_bf_key(sk_bloom_i, src);
+      src += BBG_BF_KEY_SIZE;
       vector_add(secret_key->sk_bloom, sk_bloom_i);
     }
   }
@@ -1713,7 +1712,7 @@ static void tbfe_bbg_vector_bf_key_free(vector_t* vector_bf_key) {
 
 void tbfe_bbg_clear_secret_key(tbfe_bbg_secret_key_t* secret_key) {
   if (secret_key) {
-    tbfe_bbg_vector_secret_key_free(secret_key->sk_bloom);
+    tbfe_bbg_vector_bf_key_free(secret_key->sk_bloom);
     tbfe_bbg_vector_secret_key_free(secret_key->sk_time);
 
     bf_clear(&secret_key->bloom_filter);
@@ -1870,14 +1869,13 @@ void tbfe_bbg_secret_key_serialize(uint8_t* serialized, tbfe_bbg_secret_key_t* s
   bf_write(&serialized, &secret_key->bloom_filter);
 
   for (size_t i = 0; i < sk_bloom_count; ++i) {
-    bbg_secret_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
+    bbg_bf_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
     if (sk_bloom_i == NULL) {
-      write_u32(&serialized, 0);
+      write_u8(&serialized, 0); // BF key does not exist
     } else {
-      const unsigned int sk_size = bbg_get_secret_key_size(sk_bloom_i);
-      write_u32(&serialized, sk_size);
-      bbg_serialize_secret_key(serialized, sk_bloom_i);
-      serialized += sk_size;
+      write_u8(&serialized, 1); // BF key does exist
+      bbg_serialize_bf_key(serialized, sk_bloom_i);
+      serialized += BBG_BF_KEY_SIZE;
     }
   }
 
@@ -1923,11 +1921,11 @@ unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
 
   unsigned int total_size = 3 * sizeof(uint32_t) + bf_serialized_size(&secret_key->bloom_filter);
   for (size_t i = 0; i < sk_bloom_count; ++i) {
-    bbg_secret_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
+    bbg_bf_key_t* sk_bloom_i = vector_get(secret_key->sk_bloom, i);
     if (sk_bloom_i != NULL) {
-      total_size += bbg_get_secret_key_size(sk_bloom_i);
+      total_size += BBG_BF_KEY_SIZE;
     }
-    total_size += sizeof(uint32_t);
+    total_size += sizeof(uint8_t);
   }
   for (size_t i = 0; i < sk_time_count; ++i) {
     bbg_secret_key_t* sk_time_i = vector_get(secret_key->sk_time, i);
@@ -1981,21 +1979,50 @@ static int derive_key_and_add(vector_t* dst, bbg_public_params_t* params, bbg_ma
       (key_type == BLOOM_FILTER_KEY) ? 1 : (params->total_depth - identity->depth);
   int ret = bbg_init_secret_key(sk, delegetable_levels, identity->depth);
   if (ret) {
-    goto error;
+    goto clear_sk;
   }
 
   ret = bbg_key_generation_from_master_key(sk, msk, identity, params);
   if (ret) {
-    goto error;
+    goto clear_sk;
   }
 
-  if (vector_add(dst, sk)) {
-    ret = BFE_ERROR;
-    goto error;
-  }
-  return BFE_SUCCESS;
+  bbg_bf_key_t* bf_key = NULL;
+  if (key_type == BLOOM_FILTER_KEY) {
+    // Generate and add bloom fiter key
+    bf_key = malloc(sizeof(*bf_key));
+    if (!bf_key) {
+      ret = BFE_ERROR;
+      goto clear_sk;
+    }
 
-error:
+    ret = bbg_init_bf_key_from_secret_key(bf_key, sk);
+    if (ret) {
+      goto clear_bf_key;
+    }
+
+    if (vector_add(dst, bf_key)) {
+      ret = BFE_ERROR;
+      goto clear_bf_key;
+    }
+
+    // Secret key is not needed anymore
+    ret = BFE_SUCCESS;
+    goto clear_sk;
+
+  } else if (key_type == SECRET_KEY) {
+    // Add secret key
+    if (vector_add(dst, sk)) {
+      ret = BFE_ERROR;
+      goto clear_sk;
+    }
+    return BFE_SUCCESS;
+  }
+
+clear_bf_key:
+  bbg_clear_bf_key(bf_key);
+  free(bf_key);
+clear_sk:
   bbg_clear_secret_key(sk);
   free(sk);
   return ret;
@@ -2031,14 +2058,14 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
   {
     int ret = BFE_SUCCESS;
 
-    // Private vector for each thread to store the generated secret keys.
-    vector_t secret_key_private = {NULL, 0, 0};
-    if (vector_init(&secret_key_private, secret_key->sk_bloom->capacity / omp_get_num_threads())) {
+    // Private vector for each thread to store the generated bloom filter keys.
+    vector_t bf_key_private = {NULL, 0, 0};
+    if (vector_init(&bf_key_private, secret_key->sk_bloom->capacity / omp_get_num_threads())) {
       ret = BFE_ERROR;
       goto clear_thread;
     }
 
-    // For each position in [0, bloom_filter_size-1] extract a secret key.
+    // For each position in [0, bloom_filter_size-1] extract a bloom filter key.
     // Static scheduling ensures that each thread is assigned one consecutive chunk of loop
     // iterations.
 #pragma omp for schedule(static)
@@ -2053,23 +2080,23 @@ int tbfe_bbg_keygen(tbfe_bbg_public_key_t* public_key, tbfe_bbg_secret_key_t* se
       }
 
       // Get the bloom filter key and add it the per-thread 'secret key vector'
-      ret |= derive_key_and_add(&secret_key_private, &public_key->params, &msk, &identity_1i,
+      ret |= derive_key_and_add(&bf_key_private, &public_key->params, &msk, &identity_1i,
                                 BLOOM_FILTER_KEY);
     clear_loop:
       bbg_clear_identity(&identity_1i);
     }
 
-    // Copy the generated secret keys from the private vectors of the threads.
-    // Executing the loop ordered ensures that the secret keys are added in increasing order of
-    // identities.
+    // Copy the generated bloom filter keys from the private vectors of the threads.
+    // Executing the loop ordered ensures that the bloom filter keys are added in increasing order
+    // of identities.
 #pragma omp for ordered
     for (int i = 0; i < omp_get_num_threads(); ++i) {
 #pragma omp ordered
-      vector_copy(secret_key->sk_bloom, &secret_key_private);
+      vector_copy(secret_key->sk_bloom, &bf_key_private);
     }
 
   clear_thread:
-    vector_clear(&secret_key_private);
+    vector_clear(&bf_key_private);
     result_status |= ret;
   }
 
@@ -2300,8 +2327,8 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
     goto clear;
   }
 
-  // Retrieve [ciphertext, secret key] - pair
-  bbg_secret_key_t* sk_id         = vector_get(secret_key->sk_bloom, decapsulating_identity);
+  // Retrieve [ciphertext, bloom filter key] - pair
+  bbg_bf_key_t* bf_key_id         = vector_get(secret_key->sk_bloom, decapsulating_identity);
   bbg_ciphertext_t* ciphertext_id = vector_get(ciphertext->Cs, decapsulating_identity_index);
 
   // Verify EdDSA signatures on the ciphertexts.
@@ -2312,7 +2339,7 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   }
 
   // Decapsulate the ciphertext to get the key.
-  result_status = bbg_decapsulate(&_key, ciphertext_id, sk_id, &ciphertext->eddsa_pk,
+  result_status = bbg_decapsulate(&_key, ciphertext_id, bf_key_id, &ciphertext->eddsa_pk,
                                   &public_key->params, &tau_prime);
   if (result_status) {
     // This case should never happen if we have a key
@@ -2350,10 +2377,10 @@ int tbfe_bbg_puncture_ciphertext(tbfe_bbg_secret_key_t* secret_key,
     bitset_set(&secret_key->bloom_filter.bitset, pos);
 
     // If the corresponding bloom filter key still exist, delete it
-    bbg_secret_key_t* sk = vector_get(secret_key->sk_bloom, pos);
-    if (sk) {
-      bbg_clear_secret_key(sk);
-      free(sk);
+    bbg_bf_key_t* bf_key = vector_get(secret_key->sk_bloom, pos);
+    if (bf_key) {
+      bbg_clear_bf_key(bf_key);
+      free(bf_key);
       vector_set(secret_key->sk_bloom, pos, NULL);
     }
   }
@@ -2380,21 +2407,48 @@ static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* param
       (key_type == BLOOM_FILTER_KEY) ? 1 : (params->total_depth - identity->depth);
   int ret = bbg_init_secret_key(sknew, delegetable_levels, identity->depth);
   if (ret) {
-    goto clear;
+    goto clear_sknew;
   }
 
   ret = bbg_key_generation_from_parent(sknew, sk, identity, params);
   if (ret) {
-    goto clear;
+    goto clear_sknew;
   }
 
-  if (vector_add(dst, sknew)) {
-    ret = BFE_ERROR;
-    goto clear;
-  }
-  return ret;
+  bbg_bf_key_t* bf_key = NULL;
+  if (key_type == BLOOM_FILTER_KEY) {
+    // Generate bloom fiter key
+    bf_key = malloc(sizeof(*bf_key));
+    if (!bf_key) {
+      ret = BFE_ERROR;
+      goto clear_sknew;
+    }
+    ret = bbg_init_bf_key_from_secret_key(bf_key, sknew);
+    if (ret) {
+      goto clear_bf_key;
+    }
+    if (vector_add(dst, bf_key)) {
+      ret = BFE_ERROR;
+      goto clear_bf_key;
+    }
 
-clear:
+    // Secret key is not needed anymore
+    ret = BFE_SUCCESS;
+    goto clear_sknew;
+
+  } else if (key_type == SECRET_KEY) {
+    // Add secret key
+    if (vector_add(dst, sknew)) {
+      ret = BFE_ERROR;
+      goto clear_sknew;
+    }
+    return BFE_SUCCESS;
+  }
+
+clear_bf_key:
+  bbg_clear_bf_key(bf_key);
+  free(bf_key);
+clear_sknew:
   bbg_clear_secret_key(sknew);
   free(sknew);
   return ret;
@@ -2438,7 +2492,7 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
 
   // Clear the existing bloom filter keys
   const unsigned bloom_filter_size = public_key->bloom_filter_size;
-  tbfe_bbg_vector_secret_key_free(secret_key->sk_bloom);
+  tbfe_bbg_vector_bf_key_free(secret_key->sk_bloom);
   secret_key->sk_bloom = vector_new(bloom_filter_size);
   if (!secret_key->sk_bloom) {
     result_status = BFE_ERROR;
@@ -2456,14 +2510,14 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
       goto clear_identity_tau_i;
     }
 
-    // Private vector for each thread to store the generated secret keys.
-    vector_t secret_key_private = {NULL, 0, 0};
-    if (vector_init(&secret_key_private, secret_key->sk_bloom->capacity / omp_get_num_threads())) {
+    // Private vector for each thread to store the generated bloom filter keys.
+    vector_t bf_key_private = {NULL, 0, 0};
+    if (vector_init(&bf_key_private, secret_key->sk_bloom->capacity / omp_get_num_threads())) {
       ret = BFE_ERROR;
       goto clear_thread;
     }
 
-    // For each position in [0, bloom_filter_size-1] extract a secret key.
+    // For each position in [0, bloom_filter_size-1] extract a bloom filter key.
     // Static scheduling ensures that each thread is assigned one consecutive chunk of loop
     // iterations.
 #pragma omp for schedule(static)
@@ -2472,23 +2526,23 @@ int tbfe_bbg_puncture_interval(tbfe_bbg_secret_key_t* secret_key, tbfe_bbg_publi
       // tree arity.
       identity_tau_i.id[tau_i_depth - 1] = BF_POS_TO_BF_ID(pos);
       // NOTE: the keys are derived from the parent key, not from master key
-      ret |= puncture_derive_key_and_add(&secret_key_private, &public_key->params, sk_tau,
+      ret |= puncture_derive_key_and_add(&bf_key_private, &public_key->params, sk_tau,
                                          &identity_tau_i, BLOOM_FILTER_KEY);
     }
 
-    // Copy the generated secret keys from the private vectors of the threads.
-    // Executing the loop ordered ensures that the secret keys are added in increasing order of
-    // identities.
+    // Copy the generated bloom filter keys from the private vectors of the threads.
+    // Executing the loop ordered ensures that the bloom filter keys are added in increasing order
+    // of identities.
 #pragma omp for ordered
     for (int i = 0; i < omp_get_num_threads(); ++i) {
 #pragma omp ordered
-      vector_copy(secret_key->sk_bloom, &secret_key_private);
+      vector_copy(secret_key->sk_bloom, &bf_key_private);
     }
 
     result_status |= ret;
 
   clear_thread:
-    vector_clear(&secret_key_private);
+    vector_clear(&bf_key_private);
   clear_identity_tau_i:
     bbg_clear_identity(&identity_tau_i);
   }
@@ -2628,9 +2682,9 @@ bool tbfe_bbg_secret_keys_are_equal(tbfe_bbg_secret_key_t* l, tbfe_bbg_secret_ke
   }
 
   for (size_t i = 0; i < vector_size(l->sk_bloom); ++i) {
-    bbg_secret_key_t* sk_l = vector_get(l->sk_bloom, i);
-    bbg_secret_key_t* sk_r = vector_get(r->sk_bloom, i);
-    if (!bbg_secret_keys_are_equal(sk_l, sk_r)) {
+    bbg_bf_key_t* bfk_l = vector_get(l->sk_bloom, i);
+    bbg_bf_key_t* bfk_r = vector_get(r->sk_bloom, i);
+    if (!bbg_bf_keys_are_equal(bfk_l, bfk_r)) {
       return false;
     }
   }
