@@ -45,6 +45,9 @@
 #define BBG_CIPHERTEXT_SIZE (G1_SIZE_COMPRESSED + G2_SIZE_COMPRESSED + GT_SIZE_COMPRESSED)
 /* BBG public key consists of one group element*/
 #define BBG_PUBLIC_KEY_SIZE GT_SIZE_COMPRESSED
+/* BBG bloom filter key consists of three group elements */
+#define BBG_BF_KEY_SIZE (G1_SIZE_COMPRESSED + G2_SIZE_COMPRESSED + G1_SIZE_COMPRESSED)
+
 /* Set arity N of the interval tree */
 #define ARITY TBFE_ARITY
 /* Add offset to bloom filter index --> BF identities start at (ARITY + 1) */
@@ -98,6 +101,15 @@ typedef struct {
 } bbg_secret_key_t;
 
 /**
+ * Same as bbg_secret_key_t but stripped down to hold only essential elements.
+ */
+typedef struct {
+  g1_t a0; /**< a0 part of the secret key - G_1 element */
+  g2_t a1; /**< a1 part of the secret key - G_2 element */
+  g1_t b;  /**< b part of the secret key (only one element) - G_1 element*/
+} bbg_bf_key_t;
+
+/**
  * Ciphertext of BBG HIBE.
  * C = [a,b,c] where:
  *    - a = e(g_2, g_1)^s * M
@@ -136,6 +148,7 @@ static int bbg_init_identity(bbg_identity_t* identity, unsigned int id_depth);
 static int bbg_init_public_key(bbg_public_key_t* pk);
 static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegatable_levels,
                                unsigned int id_depth);
+static int bbg_init_bf_key(bbg_bf_key_t* bf_key);
 static int bbg_init_ciphertext(bbg_ciphertext_t* ciphertext);
 static int bbg_init_public_params(bbg_public_params_t* params, unsigned int depth);
 static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
@@ -144,20 +157,24 @@ static int bbg_init_master_key(bbg_master_key_t* mk);
 static int bbg_init_key(bbg_key_t* key);
 static int bbg_init_identity_from(bbg_identity_t* dst, unsigned int depth,
                                   const bbg_identity_t* src);
+static int bbg_init_bf_key_from_secret_key(bbg_bf_key_t* bf_key, bbg_secret_key_t* sk);
 // ## SERIALIZE AND DESERIALIZE
 static void bbg_serialize_identity(uint8_t* dst, const bbg_identity_t* identity);
 static void bbg_serialize_public_key(uint8_t* serialized, bbg_public_key_t* public_key);
 static void bbg_serialize_secret_key(uint8_t* serialized, bbg_secret_key_t* secret_key);
+static void bbg_serialize_bf_key(uint8_t* serialized, bbg_bf_key_t* bf_key);
 static void bbg_serialize_ciphertext(uint8_t* serialized, bbg_ciphertext_t* ciphertext);
 static void bbg_serialize_public_params(uint8_t* serialized, bbg_public_params_t* public_params);
 static void bbg_deserialize_identity(bbg_identity_t* identity, const uint8_t* src);
 static void bbg_deserialize_public_key(bbg_public_key_t* public_key, const uint8_t* serialized);
 static void bbg_deserialize_secret_key(bbg_secret_key_t* secret_key, const uint8_t* serialized);
+static void bbg_deserialize_bf_key(bbg_bf_key_t* bf_key, const uint8_t* serialized);
 static void bbg_deserialize_ciphertext(bbg_ciphertext_t* ciphertext, const uint8_t* serialized);
 // ## CLEAR AND FREE
 static void bbg_clear_identity(bbg_identity_t* identity);
 static void bbg_clear_public_key(bbg_public_key_t* pk);
 static void bbg_clear_secret_key(bbg_secret_key_t* sk);
+static void bbg_clear_bf_key(bbg_bf_key_t* bf_key);
 static void bbg_clear_ciphertext(bbg_ciphertext_t* ciphertext);
 static void bbg_clear_public_params(bbg_public_params_t* params);
 static void bbg_clear_master_key(bbg_master_key_t* mk);
@@ -201,6 +218,7 @@ static int bbg_convert_key_to_bit_string(uint8_t* bit_string, bbg_key_t* key);
                              double false_positive_prob); */
 /* int tbfe_bbg_secret_key_deserialize(tbfe_bbg_secret_key_t* secret_key, const uint8_t* src); */
 static void tbfe_bbg_vector_secret_key_free(vector_t* vector_secret_key);
+static void tbfe_bbg_vector_bf_key_free(vector_t* vector_bf_key);
 /* void tbfe_bbg_clear_secret_key(tbfe_bbg_secret_key_t* secret_key); */
 /* int tbfe_bbg_init_ciphertext(tbfe_bbg_ciphertext_t* ciphertext); */
 /* int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext, const uint8_t* src); */
@@ -236,6 +254,7 @@ static int puncture_derive_key_and_add(vector_t* dst, bbg_public_params_t* param
 static bool bbg_public_keys_are_equal(bbg_public_key_t* l, bbg_public_key_t* r);
 static bool bbg_public_params_are_equal(bbg_public_params_t* l, bbg_public_params_t* r);
 static bool bbg_secret_keys_are_equal(bbg_secret_key_t* l, bbg_secret_key_t* r);
+static bool bbg_bf_keys_are_equal(bbg_bf_key_t* l, bbg_bf_key_t* r);
 static bool bbg_ciphertexts_are_equal(bbg_ciphertext_t* l, bbg_ciphertext_t* r);
 bool tbfe_bbg_public_keys_are_equal(tbfe_bbg_public_key_t* l, tbfe_bbg_public_key_t* r);
 bool tbfe_bbg_secret_keys_are_equal(tbfe_bbg_secret_key_t* l, tbfe_bbg_secret_key_t* r);
@@ -569,6 +588,29 @@ static int bbg_init_secret_key(bbg_secret_key_t* sk, unsigned int delegatable_le
   return ret;
 }
 
+static int bbg_init_bf_key(bbg_bf_key_t* bf_key) {
+  if (!bf_key) {
+    return BFE_ERROR_INVALID_PARAM;
+  }
+
+  int ret = BFE_SUCCESS;
+
+  g1_null(bf_key->a0);
+  g2_null(bf_key->a1);
+  g1_null(bf_key->b);
+
+  RLC_TRY {
+    g1_new(bf_key->a0);
+    g2_new(bf_key->a1);
+    g1_new(bf_key->b);
+  }
+  RLC_CATCH_ANY {
+    ret = BFE_ERROR;
+  }
+
+  return ret;
+}
+
 static int bbg_init_ciphertext(bbg_ciphertext_t* ciphertext) {
   if (!ciphertext) {
     return BFE_ERROR_INVALID_PARAM;
@@ -725,6 +767,23 @@ static int bbg_init_identity_from(bbg_identity_t* dst, unsigned int depth,
   memcpy(dst->id, src->id, sizeof(dst->id[0]) * MIN(dst->depth, src->depth));
   return BFE_SUCCESS;
 }
+
+static int bbg_init_bf_key_from_secret_key(bbg_bf_key_t* bf_key, bbg_secret_key_t* sk) {
+  if (!bf_key || !sk) {
+    return BFE_ERROR_INVALID_PARAM;
+  }
+
+  int ret = bbg_init_bf_key(bf_key);
+  if (ret != BFE_SUCCESS) {
+    return ret;
+  }
+
+  g1_copy(bf_key->a0, sk->a0);
+  g2_copy(bf_key->a1, sk->a1);
+  g1_copy(bf_key->b, sk->b[0]);
+
+  return BFE_SUCCESS;
+}
 ///@}
 
 /* >> SERIALIZE AND DESERIALIZE << */
@@ -757,6 +816,12 @@ static void bbg_serialize_secret_key(uint8_t* serialized, bbg_secret_key_t* secr
   for (size_t i = 0; i < secret_key->num_delegatable_levels; ++i) {
     write_g1(&serialized, secret_key->b[i]);
   }
+}
+
+static void bbg_serialize_bf_key(uint8_t* serialized, bbg_bf_key_t* bf_key) {
+  write_g1(&serialized, bf_key->a0);
+  write_g2(&serialized, bf_key->a1);
+  write_g1(&serialized, bf_key->b);
 }
 
 static void bbg_serialize_ciphertext(uint8_t* serialized, bbg_ciphertext_t* ciphertext) {
@@ -809,6 +874,13 @@ static void bbg_deserialize_secret_key(bbg_secret_key_t* secret_key, const uint8
   }
 }
 
+static void bbg_deserialize_bf_key(bbg_bf_key_t* bf_key, const uint8_t* serialized) {
+  bbg_init_bf_key(bf_key);
+  read_g1(bf_key->a0, &serialized);
+  read_g2(bf_key->a1, &serialized);
+  read_g1(bf_key->b, &serialized);
+}
+
 static void bbg_deserialize_ciphertext(bbg_ciphertext_t* ciphertext, const uint8_t* serialized) {
   read_gt(ciphertext->a, &serialized);
   read_g2(ciphertext->b, &serialized);
@@ -854,6 +926,17 @@ static void bbg_clear_secret_key(bbg_secret_key_t* sk) {
     g1_free(sk->a0);
 
     bbg_clear_identity(&sk->identity);
+  }
+}
+
+static void bbg_clear_bf_key(bbg_bf_key_t* bf_key) {
+  if (bf_key) {
+    g2_set_infty(bf_key->a1);
+    g2_free(bf_key->a1);
+    g1_set_infty(bf_key->a0);
+    g1_free(bf_key->a0);
+    g1_set_infty(bf_key->b);
+    g1_free(bf_key->b);
   }
 }
 
@@ -1619,6 +1702,15 @@ static void tbfe_bbg_vector_secret_key_free(vector_t* vector_secret_key) {
   vector_free(vector_secret_key);
 }
 
+static void tbfe_bbg_vector_bf_key_free(vector_t* vector_bf_key) {
+  for (size_t i = 0; i < vector_size(vector_bf_key); ++i) {
+    bbg_bf_key_t* bf_key = vector_get(vector_bf_key, i);
+    bbg_clear_bf_key(bf_key);
+    free(bf_key);
+  }
+  vector_free(vector_bf_key);
+}
+
 void tbfe_bbg_clear_secret_key(tbfe_bbg_secret_key_t* secret_key) {
   if (secret_key) {
     tbfe_bbg_vector_secret_key_free(secret_key->sk_bloom);
@@ -1821,8 +1913,8 @@ void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* c
 }
 
 unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key) {
-  return BBG_PUBLIC_KEY_SIZE + bbg_get_public_params_size(&public_key->params) +
-         sizeof(uint32_t) + sizeof(uint8_t);
+  return BBG_PUBLIC_KEY_SIZE + bbg_get_public_params_size(&public_key->params) + sizeof(uint32_t) +
+         sizeof(uint8_t);
 }
 
 unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
@@ -1846,8 +1938,8 @@ unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
 
 unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
   const unsigned int ciphertext_count = vector_size(ciphertext->Cs);
-  return sizeof(uint32_t) + sizeof(uint32_t) + (ciphertext_count * BBG_CIPHERTEXT_SIZE) + SECURITY_PARAMETER +
-         Ed25519_SIG_BYTES + Ed25519_KEY_BYTES;
+  return sizeof(uint32_t) + sizeof(uint32_t) + (ciphertext_count * BBG_CIPHERTEXT_SIZE) +
+         SECURITY_PARAMETER + Ed25519_SIG_BYTES + Ed25519_KEY_BYTES;
 }
 
 /**
@@ -2492,6 +2584,22 @@ static bool bbg_secret_keys_are_equal(bbg_secret_key_t* l, bbg_secret_key_t* r) 
   }
 
   return bbg_identities_are_equal(&l->identity, &r->identity);
+}
+
+static bool bbg_bf_keys_are_equal(bbg_bf_key_t* l, bbg_bf_key_t* r) {
+  if (!l && !r) {
+    return true;
+  }
+  if (!l || !r) {
+    return false;
+  }
+
+  if (g1_cmp(l->a0, r->a0) != RLC_EQ || g2_cmp(l->a1, r->a1) != RLC_EQ ||
+      g1_cmp(l->b, r->b) != RLC_EQ) {
+    return false;
+  }
+
+  return true;
 }
 
 static bool bbg_ciphertexts_are_equal(bbg_ciphertext_t* l, bbg_ciphertext_t* r) {
