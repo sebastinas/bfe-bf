@@ -1,10 +1,15 @@
+#include <config.h>
+
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "vector.h"
 
 #include "include/bfe-bf.h"
 #include "include/tbfe-bbg.h"
@@ -384,6 +389,180 @@ namespace {
               << duration_cast<microseconds>(punc_interval_time / REPEATS).count() << " µs - "
               << beautify_duration(punc_interval_time / REPEATS) << std::endl;
   }
+
+  // ### TBFE PERFORMANCE BENCHMARK
+  void write_array_to_file(FILE* fp, unsigned int* data, size_t size, char* header) {
+    fprintf(fp, "%s", header);
+    for (size_t i = 0; i < size; i++) {
+      fprintf(fp, "; %u", data[i]);
+    }
+    fprintf(fp, "\n");
+  }
+
+  void bench_tbfe_performance(unsigned int height) {
+    std::cout << "Running 'bench_tbfe_performance' ... " << std::endl << std::endl;
+
+    /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
+    constexpr unsigned int bloom_filter_size = 1 << 9;
+
+    constexpr unsigned int arity = TBFE_ARITY; // Get arity from config.h
+    unsigned int total_depth     = height + 2;
+    unsigned int num_intervals   = ((pow(arity, height + 1) - 1) / (arity - 1)) - 1;
+
+    // key pair
+    auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
+                                                 FALSE_POSITIVE_PROB);
+    auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
+
+    /* benchmark key generation */
+    auto start_time = high_resolution_clock::now();
+    tbfe_bbg_keygen(pk.get(), sk.get());
+    auto keygen_time = high_resolution_clock::now() - start_time;
+
+    /* Print some stats */
+    std::cout << "------------------------------------------------" << std::endl;
+    std::cout << "|############# ARITY " << arity << " ; HEIGHT " << height << " ##############"
+              << std::endl;
+    std::cout << "------------------------------------------------" << std::endl;
+    std::cout << "|tbfe keygen:          " << duration_cast<microseconds>(keygen_time).count()
+              << "| µs - " << beautify_duration(keygen_time) << std::endl;
+    std::cout << "|tbfe key parameters:" << std::endl;
+    std::cout << "|    hash functions:   " << pk.get()->bloom_filter_hashes << std::endl;
+    std::cout << "|    num elements:     " << bloom_filter_size << std::endl;
+    std::cout << "|    bloomfilter size: " << pk.get()->bloom_filter_size << std::endl;
+    std::cout << "|    correctness err:  " << FALSE_POSITIVE_PROB << std::endl;
+
+    std::cout << "|tree parameters:      " << std::endl;
+    std::cout << "|    arity:            " << arity << std::endl;
+    std::cout << "|    height:           " << height << std::endl;
+    std::cout << "|    # of intervals:   " << num_intervals << std::endl;
+    std::cout << "------------------------------------------------" << std::endl;
+
+    /* start benchmark */
+    // Capture average encaps, decaps and puncture time
+    nanoseconds encaps_time{0};
+    nanoseconds decaps_time{0};
+    nanoseconds puncture_time{0};
+    // Capture how long the whole benchmark takes
+    nanoseconds run_time{0};
+    // Buffer for encapsualated key
+    uint8_t K[SECURITY_PARAMETER];
+    // Buffer for decapsulated key
+    uint8_t _K[SECURITY_PARAMETER];
+    // Decaps failure counter --> check if (K == _K)
+    auto failures = 0;
+    // Save min, max and total sum of sk key size
+    unsigned int* size_sk          = (unsigned int*)malloc(sizeof(unsigned int) * num_intervals);
+    unsigned int size_sk_min       = UINT_MAX;
+    unsigned int size_sk_max       = 0;
+    unsigned int size_sk_sum       = 0;
+    unsigned int size_sk_max_index = 1;
+    unsigned int size_sk_min_index = 1;
+    // Record size of sk_time at every interval
+    unsigned int* sk_time_size = (unsigned int*)malloc(sizeof(unsigned int) * num_intervals);
+
+    std::cout << "|          << RUNNING BENCHMARK >>" << std::endl;
+    auto start_time_bench = high_resolution_clock::now();
+
+    // 1.) Get secret key size for interval 1
+    auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
+    size_sk[0]      = tbfe_bbg_secret_key_size(sk.get());
+    if (size_sk[0] < size_sk_min)
+      size_sk_min = size_sk[0];
+    if (size_sk[0] > size_sk_max)
+      size_sk_max = size_sk[0];
+    size_sk_sum += size_sk[0];
+    sk_time_size[0] = sk->sk_time->size;
+
+    // 2.) Encaps and Decaps for Interval 1
+    start_time  = high_resolution_clock::now();
+    auto status = tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
+    encaps_time += high_resolution_clock::now() - start_time;
+
+    start_time = high_resolution_clock::now();
+    status |= tbfe_bbg_decaps(_K, ciphertext.get(), sk.get(), pk.get());
+    decaps_time += high_resolution_clock::now() - start_time;
+
+    failures += (memcmp(K, _K, SECURITY_PARAMETER) != 0);
+
+    for (unsigned int i = 2; i <= num_intervals; ++i) {
+      // 3.) Puncture interval i
+      start_time = high_resolution_clock::now();
+      status |= tbfe_bbg_puncture_interval(sk.get(), pk.get(), i);
+      puncture_time += high_resolution_clock::now() - start_time;
+
+      // 4.) Get secret key size of interval i
+      size_sk[i - 1] = tbfe_bbg_secret_key_size(sk.get());
+      if (size_sk[i - 1] < size_sk_min) {
+        size_sk_min       = size_sk[i - 1];
+        size_sk_min_index = i;
+      }
+      if (size_sk[i - 1] > size_sk_max) {
+        size_sk_max       = size_sk[i - 1];
+        size_sk_max_index = i;
+      }
+      size_sk_sum += size_sk[i - 1];
+      sk_time_size[i - 1] = sk->sk_time->size;
+
+      // 5.) Encaps and Decaps for Interval i
+      start_time = high_resolution_clock::now();
+      status |= tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), i);
+      encaps_time += high_resolution_clock::now() - start_time;
+
+      start_time = high_resolution_clock::now();
+      status |= tbfe_bbg_decaps(_K, ciphertext.get(), sk.get(), pk.get());
+      decaps_time += high_resolution_clock::now() - start_time;
+
+      failures += (memcmp(K, _K, SECURITY_PARAMETER) != 0);
+    }
+    run_time = high_resolution_clock::now() - start_time_bench;
+
+    // Print some nice output
+    std::cout << "------------------------------------------------" << std::endl;
+    std::cout << "|size pk:              " << tbfe_bbg_public_key_size(pk.get()) << " bytes"
+              << std::endl;
+    std::cout << "|size ctx:             " << tbfe_bbg_ciphertext_size(ciphertext.get()) << " bytes"
+              << std::endl;
+    std::cout << "|size sk (min):        " << size_sk_min
+              << " bytes @ index = " << size_sk_min_index << std::endl;
+    std::cout << "|size sk (max):        " << size_sk_max
+              << " bytes @ index = " << size_sk_max_index << std::endl;
+    std::cout << "|size sk (avg):        " << size_sk_sum / num_intervals << " bytes" << std::endl;
+    std::cout << "|-----------------------------------------------" << std::endl;
+    std::cout << "|status==BFE_SUCCESS?  " << (status == BFE_SUCCESS) << std::endl;
+    std::cout << "|failed decaps:        " << failures << std::endl;
+    std::cout << "|tbfe encaps (avg):    "
+              << duration_cast<microseconds>(encaps_time / num_intervals).count() << " µs - "
+              << beautify_duration(encaps_time / num_intervals) << std::endl;
+    std::cout << "|tbfe decaps (avg):    "
+              << duration_cast<microseconds>(decaps_time / num_intervals).count() << " µs - "
+              << beautify_duration(decaps_time / num_intervals) << std::endl;
+    std::cout << "|tbfe punc (avg):      "
+              << duration_cast<microseconds>(puncture_time / (num_intervals - 1)).count()
+              << " µs - " << beautify_duration(puncture_time / (num_intervals - 1)) << std::endl;
+    std::cout << "------------------------------------------------" << std::endl;
+    std::cout << "|  << BENCHMARK RUNTIME :   " << beautify_duration(run_time) << " >>"
+              << std::endl;
+    std::cout << "------------------------------------------------" << std::endl;
+    std::cout << std::endl;
+
+    // Write key sizes to csv file
+    FILE* fp;
+    fp = fopen("tbfe_performance.csv", "a");
+    char header[100];
+
+    sprintf(header, "ARITY %d - HEIGHT %d - Secret Key Size", arity, height);
+    write_array_to_file(fp, size_sk, num_intervals, header);
+
+    sprintf(header, "ARITY %d - HEIGHT %d - sk_time Size", arity, height);
+    write_array_to_file(fp, sk_time_size, num_intervals, header);
+
+    fprintf(fp, "\n");
+    fclose(fp);
+
+    free(size_sk);
+    free(sk_time_size);
+  }
 } // namespace
 
 int main(int argc, char** argv) {
@@ -399,6 +578,8 @@ int main(int argc, char** argv) {
       bench_bfe();
     } else if (arg == "tbfe") {
       bench_tbfe();
+    } else if (arg == "tbfe-perf") {
+      bench_tbfe_performance(3); // Use static height of 3 for now
     } else {
       std::cout << "Unknown benchmark: " << argv[i] << " - valid benchmarks are 'bfe' and 'tbfe'."
                 << std::endl;

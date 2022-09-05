@@ -125,6 +125,7 @@ target_link_libraries(bench PRIVATE bfe)
 if (LTO_SUPPORTED)
   set_target_properties(bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
+target_include_directories(bench PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # testing
 enable_testing()
