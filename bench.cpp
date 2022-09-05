@@ -78,6 +78,7 @@ namespace std {
 
 namespace {
   constexpr unsigned int REPEATS       = 50;
+  constexpr unsigned int WARMUP        = 5;
   constexpr double FALSE_POSITIVE_PROB = 1.0 / (1 << 10);
 
   template <class T, class I, class... Args>
@@ -143,7 +144,6 @@ namespace {
     return ss.str();
   }
 
-
   // ### BFE BENCHMARK
   void bench_bfe() {
     auto sk = make_holder<bfe_bf_secret_key_t>(bfe_bf_init_secret_key);
@@ -205,21 +205,22 @@ namespace {
               << beautify_duration(punc_time / REPEATS) << std::endl;
   }
 
-
   // ### TBFE BENCHMARK
   void bench_tbfe() {
-    std::cout << "Running 'bench_tbfe' ... " << std::endl; 
+    std::cout << "Running 'bench_tbfe' ... " << std::endl;
 
     /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
     constexpr unsigned int bloom_filter_size = 1 << 9;
     constexpr unsigned int total_depth       = 10 + 2;
 
     // key pair for time-interval 1
-    auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size, FALSE_POSITIVE_PROB);
+    auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
+                                                 FALSE_POSITIVE_PROB);
     auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
 
     // key pair for time-interval 10 (e.g. leaf)
-    auto sk_leaf = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size, FALSE_POSITIVE_PROB);
+    auto sk_leaf = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
+                                                      FALSE_POSITIVE_PROB);
     auto pk_leaf = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
     /* generate keys and puncture 'leaf secret key' 10 times */
     tbfe_bbg_keygen(pk_leaf.get(), sk_leaf.get());
@@ -230,7 +231,8 @@ namespace {
     /* benchmark key generation */
     auto start_time = high_resolution_clock::now();
     tbfe_bbg_keygen(pk.get(), sk.get());
-    auto keygen_time = high_resolution_clock::now() - start_time;
+    auto end_time    = high_resolution_clock::now();
+    auto keygen_time = end_time - start_time;
     std::cout << "tbfe keygen:          " << duration_cast<microseconds>(keygen_time).count()
               << " µs - " << beautify_duration(keygen_time) << std::endl;
     std::cout << "tbfe key parameters:" << std::endl;
@@ -243,13 +245,15 @@ namespace {
 
     /* benchmark encaps */
     nanoseconds encaps_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER];
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
       start_time = high_resolution_clock::now();
       tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
-      encaps_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        encaps_time += (end_time - start_time);
     }
     std::cout << "tbfe encaps:          "
               << duration_cast<microseconds>(encaps_time / REPEATS).count() << " µs - "
@@ -258,7 +262,7 @@ namespace {
     /* benchmark encaps + serialization */
     nanoseconds encaps_serialize_time{0};
     std::vector<uint8_t> serialized_ciphertext;
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER];
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
@@ -266,7 +270,9 @@ namespace {
       tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       serialized_ciphertext.resize(tbfe_bbg_ciphertext_size(ciphertext.get()));
       tbfe_bbg_ciphertext_serialize(serialized_ciphertext.data(), ciphertext.get());
-      encaps_serialize_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        encaps_serialize_time += end_time - start_time;
     }
     std::cout << "tbfe encaps (+ ser):  "
               << duration_cast<microseconds>(encaps_serialize_time / REPEATS).count() << " µs - "
@@ -274,13 +280,15 @@ namespace {
 
     /* benchmark encaps leaf*/
     nanoseconds encaps_leaf_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER];
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
       start_time = high_resolution_clock::now();
       tbfe_bbg_encaps(K, ciphertext.get(), pk_leaf.get(), 10);
-      encaps_leaf_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        encaps_leaf_time += end_time - start_time;
     }
     std::cout << "tbfe encaps (leaf):   "
               << duration_cast<microseconds>(encaps_leaf_time / REPEATS).count() << " µs - "
@@ -288,14 +296,16 @@ namespace {
 
     /* benchmark decaps */
     nanoseconds decaps_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
       tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       start_time = high_resolution_clock::now();
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
-      decaps_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        decaps_time += end_time - start_time;
     }
     std::cout << "tbfe decaps:          "
               << duration_cast<microseconds>(decaps_time / REPEATS).count() << " µs - "
@@ -303,7 +313,7 @@ namespace {
 
     /* benchmark decaps + serialization */
     nanoseconds decaps_serialize_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
 
       {
@@ -318,38 +328,43 @@ namespace {
                                                            serialized_ciphertext.data());
 
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
-      decaps_serialize_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        decaps_serialize_time += end_time - start_time;
     }
     std::cout << "tbfe decaps (+ ser):  "
               << duration_cast<microseconds>(decaps_serialize_time / REPEATS).count() << " µs - "
               << beautify_duration(decaps_serialize_time / REPEATS) << std::endl;
 
-     /* benchmark decaps leaf */
+    /* benchmark decaps leaf */
     nanoseconds decaps_leaf_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER], Kd[SECURITY_PARAMETER];
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
       tbfe_bbg_encaps(K, ciphertext.get(), pk_leaf.get(), 10);
       start_time = high_resolution_clock::now();
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk_leaf.get(), pk_leaf.get());
-      decaps_leaf_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        decaps_leaf_time += end_time - start_time;
     }
     std::cout << "tbfe decaps (leaf):   "
               << duration_cast<microseconds>(decaps_leaf_time / REPEATS).count() << " µs - "
               << beautify_duration(decaps_leaf_time / REPEATS) << std::endl;
 
-
     /* benchmark puncture ctx */
     nanoseconds punc_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
+    for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
       uint8_t K[SECURITY_PARAMETER];
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
       tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       start_time = high_resolution_clock::now();
       tbfe_bbg_puncture_ciphertext(sk.get(), ciphertext.get());
-      punc_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        punc_time += end_time - start_time;
     }
     std::cout << "tbfe punc:            "
               << duration_cast<microseconds>(punc_time / REPEATS).count() << " µs - "
@@ -358,10 +373,12 @@ namespace {
     /* benchmark puncture interval */
     nanoseconds punc_interval_time{0};
     unsigned int time_interval = 1;
-    for (unsigned int i = 0; i < REPEATS; ++i, ++time_interval) {
+    for (unsigned int i = 0; i < (WARMUP + REPEATS); ++i, ++time_interval) {
       start_time = high_resolution_clock::now();
       tbfe_bbg_puncture_interval(sk.get(), pk.get(), time_interval);
-      punc_interval_time += high_resolution_clock::now() - start_time;
+      end_time = high_resolution_clock::now();
+      if (i >= WARMUP)
+        punc_interval_time += end_time - start_time;
     }
     std::cout << "tbfe punc (interval): "
               << duration_cast<microseconds>(punc_interval_time / REPEATS).count() << " µs - "
