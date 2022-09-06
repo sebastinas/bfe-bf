@@ -391,7 +391,8 @@ namespace {
   }
 
   // ### TBFE PERFORMANCE BENCHMARK
-  void write_array_to_file(FILE* fp, unsigned int* data, size_t size, char* header) {
+  void write_array_to_file(FILE* fp, std::vector<unsigned int> data, char* header) {
+    size_t size = data.size();
     fprintf(fp, "%s", header);
     for (size_t i = 0; i < size; i++) {
       fprintf(fp, "; %u", data[i]);
@@ -452,14 +453,15 @@ namespace {
     // Decaps failure counter --> check if (K == _K)
     auto failures = 0;
     // Save min, max and total sum of sk key size
-    unsigned int* size_sk          = (unsigned int*)malloc(sizeof(unsigned int) * num_intervals);
     unsigned int size_sk_min       = UINT_MAX;
     unsigned int size_sk_max       = 0;
     unsigned int size_sk_sum       = 0;
     unsigned int size_sk_max_index = 1;
     unsigned int size_sk_min_index = 1;
+    // Record size of sk at every interval
+    std::vector<unsigned int> size_sk(num_intervals);
     // Record size of sk_time at every interval
-    unsigned int* sk_time_size = (unsigned int*)malloc(sizeof(unsigned int) * num_intervals);
+    std::vector<unsigned int> sk_time_size(num_intervals);
 
     std::cout << "|          << RUNNING BENCHMARK >>" << std::endl;
     auto start_time_bench = high_resolution_clock::now();
@@ -552,16 +554,13 @@ namespace {
     char header[100];
 
     sprintf(header, "ARITY %d - HEIGHT %d - Secret Key Size", arity, height);
-    write_array_to_file(fp, size_sk, num_intervals, header);
+    write_array_to_file(fp, size_sk, header);
 
     sprintf(header, "ARITY %d - HEIGHT %d - sk_time Size", arity, height);
-    write_array_to_file(fp, sk_time_size, num_intervals, header);
+    write_array_to_file(fp, sk_time_size, header);
 
     fprintf(fp, "\n");
     fclose(fp);
-
-    free(size_sk);
-    free(sk_time_size);
   }
 } // namespace
 
