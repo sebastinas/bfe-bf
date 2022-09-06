@@ -53,6 +53,12 @@
 /* Add offset to bloom filter index --> BF identities start at (ARITY + 1) */
 #define BF_POS_TO_BF_ID(A) (A + ARITY + 1)
 
+/* Error codes for OpenSSL EVP */
+typedef enum {
+  EVP_FAILURE = 0, /**< An error occurred */
+  EVP_SUCCESS = 1, /**< All operations were successful */
+} evp_error_t;
+
 /* States if some BBG secret key is a bloom filter key or not */
 typedef enum {
   BLOOM_FILTER_KEY = 0, /**< Key is of type bbg bloom filter key */

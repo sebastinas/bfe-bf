@@ -37,12 +37,6 @@ typedef enum {
   BFE_ERROR_KEY_PUNCTURED = 3, /**< The key was already punctured */
 } bfe_bf_error_t;
 
-/* Error codes for OpenSSL EVP */
-typedef enum {
-  EVP_FAILURE = 0, /**< An error occurred */
-  EVP_SUCCESS = 1, /**< All operations were successful */
-} evp_error_t;
-
 /* bloom filter */
 
 /**
