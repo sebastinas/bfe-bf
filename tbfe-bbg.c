@@ -87,7 +87,7 @@ typedef struct {
  * Secret key of BBG HIBE (cmp. with BBG HIBE key generation)
  * sk = [a0, a1, b_{k+1} ... b_l] where:
  *    - a0 = g_2^alpha * (h_1^I_1 * ... * h_k^I_k * g_3)^r
- *    - a1 = g^r
+ *    - a1 = g_hat^r
  *    - b  = [h_k^r, ..., h_l^r]
  */
 typedef struct {
@@ -113,7 +113,7 @@ typedef struct {
  * Ciphertext of BBG HIBE.
  * C = [a,b,c] where:
  *    - a = e(g_2, g_1)^s * M
- *    - b = g^s
+ *    - b = g_hat^s
  *    - c =(h_1^I_1 * ... * h_k^I_k * g_3)^s
  */
 typedef struct {
@@ -487,7 +487,7 @@ static unsigned bbg_get_secret_key_size(const bbg_secret_key_t* secret_key) {
 }
 
 static unsigned bbg_get_public_params_size(const bbg_public_params_t* public_params) {
-  return G2_SIZE_COMPRESSED + 3 * G1_SIZE_COMPRESSED + sizeof(uint32_t) +
+  return G2_SIZE_COMPRESSED + 2 * G1_SIZE_COMPRESSED + sizeof(uint32_t) +
          (public_params->total_depth) * G1_SIZE_COMPRESSED;
 }
 ///@}
@@ -657,7 +657,6 @@ static int bbg_init_public_params(bbg_public_params_t* params, unsigned int dept
     return BFE_ERROR;
   }
 
-  g1_null(params->g);
   g2_null(params->g_hat);
   g1_null(params->g2);
   g1_null(params->g3);
@@ -670,7 +669,6 @@ static int bbg_init_public_params(bbg_public_params_t* params, unsigned int dept
 
   int ret = BFE_SUCCESS;
   RLC_TRY {
-    g1_new(params->g);
     g2_new(params->g_hat);
     g1_new(params->g2);
     g1_new(params->g3);
@@ -701,7 +699,6 @@ static int bbg_init_public_params_from_serialized(bbg_public_params_t* params,
 
   int ret = BFE_SUCCESS;
   RLC_TRY {
-    read_g1(params->g, &serialized);
     read_g2(params->g_hat, &serialized);
     read_g1(params->g2, &serialized);
     read_g1(params->g3, &serialized);
@@ -832,7 +829,6 @@ static void bbg_serialize_ciphertext(uint8_t* serialized, bbg_ciphertext_t* ciph
 
 static void bbg_serialize_public_params(uint8_t* serialized, bbg_public_params_t* public_params) {
   write_u32(&serialized, public_params->total_depth);
-  write_g1(&serialized, public_params->g);
   write_g2(&serialized, public_params->g_hat);
   write_g1(&serialized, public_params->g2);
   write_g1(&serialized, public_params->g3);
@@ -950,7 +946,6 @@ static void bbg_clear_ciphertext(bbg_ciphertext_t* ciphertext) {
 
 static void bbg_clear_public_params(bbg_public_params_t* params) {
   if (params) {
-    g1_free(params->g);
     g2_free(params->g_hat);
     g1_free(params->g2);
     g1_free(params->g3);
@@ -1036,7 +1031,6 @@ static void hash_update_tbfe_public_key(Keccak_HashInstance* ctx,
   hash_update_gt(ctx, public_key->pk.pk);
   // Public parameter
   hash_update_u32(ctx, public_key->params.total_depth);
-  hash_update_g1(ctx, public_key->params.g);
   hash_update_g2(ctx, public_key->params.g_hat);
   hash_update_g1(ctx, public_key->params.g2);
   hash_update_g1(ctx, public_key->params.g3);
@@ -1111,7 +1105,7 @@ static int bbg_convert_identity_to_zp_vector(bn_t* identity_zp_vector,
 
 /**
  * Implements the BBG HIBE setup function.
- * Parameters g, g_hat, g_2, g_3, h_1, ..., h_l are randomly generated group elements (where l =
+ * Parameters g_hat, g_2, g_3, h_1, ..., h_l are randomly generated group elements (where l =
  * total_depth). Alpha is random in Zp and g_1 = g_hat^alpha. The master key is set to g_2^alpha.
  * The public key is set to e(g_2, g_1), where e is a bilinear function.
  *
@@ -1137,7 +1131,6 @@ static int bbg_setup(bbg_master_key_t* master_key, bbg_public_key_t* public_key,
     bn_new(alpha);
 
     // Randomize public parameters
-    g1_rand(public_params->g);
     g2_rand(public_params->g_hat);
     g1_rand(public_params->g2);
     g1_rand(public_params->g3);
@@ -1222,11 +1215,11 @@ static int bbg_encapsulate(bbg_ciphertext_t* ciphertext, gt_t message, bbg_publi
     // Choose a random s from Z_p^*.
     zp_rand(u);
 
-    // ## a =  e(g2,g^alpha)^u * M
-    // public_key->pk stores already precomputed e(g2,g^alpha)
+    // ## a =  e(g2,g_hat^alpha)^u * M
+    // public_key->pk stores already precomputed e(g2,g_hat^alpha)
     gt_exp(ciphertext->a, public_key->pk, u);
     gt_mul(ciphertext->a, ciphertext->a, message);
-    // ## b = g^u
+    // ## b = g_hat^u
     g2_mul(ciphertext->b, public_params->g_hat, u);
     // ## c = c^u
     g1_mul(ciphertext->c, ciphertext->c, u);
@@ -1316,7 +1309,7 @@ static int bbg_decapsulate(bbg_key_t* key, bbg_ciphertext_t* ciphertext, bbg_bf_
     g2_copy(g2s[1], ciphertext->b);
     // g1s[0] = C
     g1_copy(g1s[0], ciphertext->c);
-    // g2s[0] = g^w * a1' ==> a1 of new sk
+    // g2s[0] = g_hat^w * a1' ==> a1 of new sk
     g2_add(g2s[0], public_params->g_hat, bf_key->a1);
 
     // key = e(g1s[0], g2s[0]) * e(g1s[1]. g2s[1])
@@ -1393,8 +1386,8 @@ static int bbg_sample_key(bbg_key_t* key) {
  * identity and l is total depth of the tree):
  *  - [in] public_params = [g, g_1, g_2, g_3, h_1, ..., h_l]
  *  - [in] master_key mk = g2^alpha
- *  - [out] secret_key = [mk*(h_1^I_1 * ... * h_k^I_k * g_3)^r, g^r, h_{k+1}^r, ..., h_l^r] = [a_0,
- * a_1, b_{k+1}, ..., b_l]
+ *  - [out] secret_key = [mk*(h_1^I_1 * ... * h_k^I_k * g_3)^r, g_hat^r, h_{k+1}^r, ..., h_l^r] =
+ * [a_0, a_1, b_{k+1}, ..., b_l]
  *
  * @param[out] secret_key   - the generated secret key, which is derived from the master key
  * @param[in] master_key    - the master key from BBG setup
@@ -1444,7 +1437,7 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
     // 3.) a0 = a0 * mk
     g1_add(secret_key->a0, master_key->mk, secret_key->a0);
 
-    // ## a_1 = g^v
+    // ## a_1 = g_hat^v
     g2_mul(secret_key->a1, public_params->g_hat, v);
 
     // ## b_{k+1} ... b_l= h_{k+1}^v ... h_l^v -> in this case b[0] ... b[l-k]
@@ -1481,7 +1474,8 @@ static int bbg_key_generation_from_master_key(bbg_secret_key_t* secret_key,
  * identity, k-1 is depth of the parent node and l is total depth of the tree):
  *  - [in] public_params = [g, g_1, g_2, g_3, h_1, ..., h_l]
  *  - [in] parent_secret_key = [a_0', a_1', b_k', ..., b_l']
- *  - [out] secret_key = [a_0' * b_k'^I_k * (h_1^I_1 * ... * h_k^I_k * g_3)^r, a_1' * g^r, b_{k+1}'
+ *  - [out] secret_key = [a_0' * b_k'^I_k * (h_1^I_1 * ... * h_k^I_k * g_3)^r, a_1' * g_hat^r,
+ * b_{k+1}'
  * * h_{k+1}^r, ..., b_l' * h_l^r] = [a_0, a_1, b_{k+1}, ..., b_l]
  *
  * @param[out] secret_key       - the generated secret key, delegated from the parent node's secret
@@ -1538,7 +1532,7 @@ static int bbg_key_generation_from_parent(bbg_secret_key_t* secret_key,
     g1_mul_sim(secret_key->a0, parent_secret_key->b[0], w, secret_key->associated_id, u);
     g1_add(secret_key->a0, secret_key->a0, parent_secret_key->a0);
 
-    // ## a_1 = a_1' * g^u
+    // ## a_1 = a_1' * g_hat^u
     // where a_1' is parent_secret_key->a1
     g2_mul(secret_key->a1, public_params->g_hat, u);
     g2_add(secret_key->a1, parent_secret_key->a1, secret_key->a1);
@@ -2636,9 +2630,8 @@ static bool bbg_public_keys_are_equal(bbg_public_key_t* l, bbg_public_key_t* r) 
 }
 
 static bool bbg_public_params_are_equal(bbg_public_params_t* l, bbg_public_params_t* r) {
-  if (g1_cmp(l->g, r->g) != RLC_EQ || g2_cmp(l->g_hat, r->g_hat) != RLC_EQ ||
-      g1_cmp(l->g2, r->g2) != RLC_EQ || g1_cmp(l->g3, r->g3) != RLC_EQ ||
-      l->total_depth != r->total_depth) {
+  if (g2_cmp(l->g_hat, r->g_hat) != RLC_EQ || g1_cmp(l->g2, r->g2) != RLC_EQ ||
+      g1_cmp(l->g3, r->g3) != RLC_EQ || l->total_depth != r->total_depth) {
     return false;
   }
 

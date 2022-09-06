@@ -90,7 +90,6 @@ typedef struct {
 typedef struct {
   unsigned total_depth; /**< The total_depth of the interval tree, including bloom filter and CHK
                            level */
-  g1_t g;
   g2_t g_hat;
   g1_t g2;
   g1_t g3;
