@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -257,8 +258,9 @@ namespace {
       start_time = high_resolution_clock::now();
       tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
-        encaps_time += (end_time - start_time);
+      if (i >= WARMUP) {
+        encaps_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe encaps:          "
               << duration_cast<microseconds>(encaps_time / REPEATS).count() << " µs - "
@@ -276,8 +278,9 @@ namespace {
       serialized_ciphertext.resize(tbfe_bbg_ciphertext_size(ciphertext.get()));
       tbfe_bbg_ciphertext_serialize(serialized_ciphertext.data(), ciphertext.get());
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         encaps_serialize_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe encaps (+ ser):  "
               << duration_cast<microseconds>(encaps_serialize_time / REPEATS).count() << " µs - "
@@ -292,8 +295,9 @@ namespace {
       start_time = high_resolution_clock::now();
       tbfe_bbg_encaps(K, ciphertext.get(), pk_leaf.get(), 10);
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         encaps_leaf_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe encaps (leaf):   "
               << duration_cast<microseconds>(encaps_leaf_time / REPEATS).count() << " µs - "
@@ -309,8 +313,9 @@ namespace {
       start_time = high_resolution_clock::now();
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         decaps_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe decaps:          "
               << duration_cast<microseconds>(decaps_time / REPEATS).count() << " µs - "
@@ -334,8 +339,9 @@ namespace {
 
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk.get(), pk.get());
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         decaps_serialize_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe decaps (+ ser):  "
               << duration_cast<microseconds>(decaps_serialize_time / REPEATS).count() << " µs - "
@@ -351,8 +357,9 @@ namespace {
       start_time = high_resolution_clock::now();
       tbfe_bbg_decaps(Kd, ciphertext.get(), sk_leaf.get(), pk_leaf.get());
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         decaps_leaf_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe decaps (leaf):   "
               << duration_cast<microseconds>(decaps_leaf_time / REPEATS).count() << " µs - "
@@ -368,8 +375,9 @@ namespace {
       start_time = high_resolution_clock::now();
       tbfe_bbg_puncture_ciphertext(sk.get(), ciphertext.get());
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         punc_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe punc:            "
               << duration_cast<microseconds>(punc_time / REPEATS).count() << " µs - "
@@ -382,8 +390,9 @@ namespace {
       start_time = high_resolution_clock::now();
       tbfe_bbg_puncture_interval(sk.get(), pk.get(), time_interval);
       end_time = high_resolution_clock::now();
-      if (i >= WARMUP)
+      if (i >= WARMUP) {
         punc_interval_time += end_time - start_time;
+      }
     }
     std::cout << "tbfe punc (interval): "
               << duration_cast<microseconds>(punc_interval_time / REPEATS).count() << " µs - "
@@ -391,13 +400,11 @@ namespace {
   }
 
   // ### TBFE PERFORMANCE BENCHMARK
-  void write_array_to_file(FILE* fp, std::vector<unsigned int> data, char* header) {
-    size_t size = data.size();
-    fprintf(fp, "%s", header);
-    for (size_t i = 0; i < size; i++) {
-      fprintf(fp, "; %u", data[i]);
+  void write_array_to_file(std::ostream& ofs, const std::vector<unsigned int>& data) {
+    for (auto d : data) {
+      ofs << "; " << d;
     }
-    fprintf(fp, "\n");
+    ofs << '\n';
   }
 
   void bench_tbfe_performance(unsigned int height) {
@@ -447,10 +454,10 @@ namespace {
     // Capture how long the whole benchmark takes
     nanoseconds run_time{0};
     // Buffer for encapsualated key
-    uint8_t K[SECURITY_PARAMETER];
+    std::array<uint8_t, SECURITY_PARAMETER> K;
     // Buffer for decapsulated key
-    uint8_t _K[SECURITY_PARAMETER];
-    // Decaps failure counter --> check if (K == _K)
+    std::array<uint8_t, SECURITY_PARAMETER> Kd;
+    // Decaps failure counter --> check if (K == Kd)
     auto failures = 0;
     // Save min, max and total sum of sk key size
     unsigned int size_sk_min       = UINT_MAX;
@@ -469,23 +476,27 @@ namespace {
     // 1.) Get secret key size for interval 1
     auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
     size_sk[0]      = tbfe_bbg_secret_key_size(sk.get());
-    if (size_sk[0] < size_sk_min)
+    if (size_sk[0] < size_sk_min) {
       size_sk_min = size_sk[0];
-    if (size_sk[0] > size_sk_max)
+    }
+    if (size_sk[0] > size_sk_max) {
       size_sk_max = size_sk[0];
+    }
     size_sk_sum += size_sk[0];
     sk_time_size[0] = sk->sk_time->size;
 
     // 2.) Encaps and Decaps for Interval 1
     start_time  = high_resolution_clock::now();
-    auto status = tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), 1);
+    auto status = tbfe_bbg_encaps(K.data(), ciphertext.get(), pk.get(), 1);
     encaps_time += high_resolution_clock::now() - start_time;
 
     start_time = high_resolution_clock::now();
-    status |= tbfe_bbg_decaps(_K, ciphertext.get(), sk.get(), pk.get());
+    status |= tbfe_bbg_decaps(Kd.data(), ciphertext.get(), sk.get(), pk.get());
     decaps_time += high_resolution_clock::now() - start_time;
 
-    failures += (memcmp(K, _K, SECURITY_PARAMETER) != 0);
+    if (K != Kd) {
+      ++failures;
+    }
 
     for (unsigned int i = 2; i <= num_intervals; ++i) {
       // 3.) Puncture interval i
@@ -508,14 +519,16 @@ namespace {
 
       // 5.) Encaps and Decaps for Interval i
       start_time = high_resolution_clock::now();
-      status |= tbfe_bbg_encaps(K, ciphertext.get(), pk.get(), i);
+      status |= tbfe_bbg_encaps(K.data(), ciphertext.get(), pk.get(), i);
       encaps_time += high_resolution_clock::now() - start_time;
 
       start_time = high_resolution_clock::now();
-      status |= tbfe_bbg_decaps(_K, ciphertext.get(), sk.get(), pk.get());
+      status |= tbfe_bbg_decaps(Kd.data(), ciphertext.get(), sk.get(), pk.get());
       decaps_time += high_resolution_clock::now() - start_time;
 
-      failures += (memcmp(K, _K, SECURITY_PARAMETER) != 0);
+      if (K != Kd) {
+        ++failures;
+      }
     }
     run_time = high_resolution_clock::now() - start_time_bench;
 
@@ -549,18 +562,12 @@ namespace {
     std::cout << std::endl;
 
     // Write key sizes to csv file
-    FILE* fp;
-    fp = fopen("tbfe_performance.csv", "a");
-    char header[100];
+    std::ofstream ofs{"tbfe_performance.csv", std::ios::app};
+    ofs << "ARITY " << arity << " - HEIGHT " << height << " - Secret Key Size";
+    write_array_to_file(ofs, size_sk);
 
-    sprintf(header, "ARITY %d - HEIGHT %d - Secret Key Size", arity, height);
-    write_array_to_file(fp, size_sk, header);
-
-    sprintf(header, "ARITY %d - HEIGHT %d - sk_time Size", arity, height);
-    write_array_to_file(fp, sk_time_size, header);
-
-    fprintf(fp, "\n");
-    fclose(fp);
+    ofs << "ARITY " << arity << " - HEIGHT " << height << " - sk_time Size";
+    write_array_to_file(ofs, sk_time_size);
   }
 } // namespace
 

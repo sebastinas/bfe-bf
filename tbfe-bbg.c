@@ -301,16 +301,17 @@ static void eddsa_clear_sig(eddsa_sig_t* eddsa) {
  * @return - BFE_SUCCESS when no errors occured, BFE_ERROR otherwise
  */
 static int eddsa_keygen(eddsa_sk_t* eddsa_sk, eddsa_pk_t* eddsa_pk) {
-
-  if (!eddsa_pk || !eddsa_sk)
+  if (!eddsa_pk || !eddsa_sk) {
     return BFE_ERROR_INVALID_PARAM;
+  }
 
   int result_status = BFE_SUCCESS;
 
   EVP_PKEY* pkey     = NULL; // Generate new KeyPair
   EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
-  if (!pctx)
+  if (!pctx) {
     return BFE_ERROR;
+  }
 
   if (EVP_PKEY_keygen_init(pctx) <= 0) {
     result_status = BFE_ERROR;
@@ -2304,7 +2305,7 @@ int tbfe_bbg_decaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   // Get the identity of the current time interval and store it in 'tau'
   bbg_identity_t tau = {0, NULL};
   int result_status  = tbfe_bbg_index_to_identity(&tau, secret_key->next_interval - 1,
-                                                 public_key->params.total_depth - 2);
+                                                  public_key->params.total_depth - 2);
   if (result_status) {
     result_status = BFE_ERROR;
     goto clear_tau;
@@ -2623,7 +2624,6 @@ clear_tau:
 /* >> COMPARE << */
 
 #if defined(BFE_STATIC)
-
 /* Function definitions */
 static bool bbg_public_keys_are_equal(bbg_public_key_t* l, bbg_public_key_t* r) {
   return gt_cmp(l->pk, r->pk) == RLC_EQ;
