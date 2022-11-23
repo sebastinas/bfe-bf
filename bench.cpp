@@ -13,6 +13,8 @@
 #include <string_view>
 #include <vector>
 
+#include <cxxopts.hpp>
+
 #include "vector.h"
 
 #include "include/bfe-bf.h"
@@ -86,9 +88,8 @@ namespace std {
 } // namespace std
 
 namespace {
-  constexpr unsigned int REPEATS       = 50;
-  constexpr unsigned int WARMUP        = 5;
-  constexpr double FALSE_POSITIVE_PROB = 1.0 / (1 << 10);
+  constexpr unsigned int REPEATS = 50;
+  constexpr unsigned int WARMUP  = 5;
 
   template <class T, class I, class... Args>
   auto make_holder(I i, Args&&... args) {
@@ -154,14 +155,12 @@ namespace {
   }
 
   // ### BFE BENCHMARK
-  void bench_bfe() {
+  void bench_bfe(unsigned int bloom_filter_size, double false_positive_prob) {
     auto sk = make_holder<bfe_bf_secret_key_t>(bfe_bf_init_secret_key);
     auto pk = make_holder<bfe_bf_public_key_t>(bfe_bf_init_public_key);
 
     auto start_time = high_resolution_clock::now();
-    /* n=2^19 >= 2^12 per day for 3 months, correctness error ~ 2^-10 */
-    static constexpr unsigned int bloom_filter_size = 1 << 19;
-    bfe_bf_keygen(pk.get(), sk.get(), 32, bloom_filter_size, FALSE_POSITIVE_PROB);
+    bfe_bf_keygen(pk.get(), sk.get(), 32, bloom_filter_size, false_positive_prob);
     auto keygen_time = high_resolution_clock::now() - start_time;
     std::cout << "bfe keygen:           " << duration_cast<microseconds>(keygen_time).count()
               << " µs" << std::endl;
@@ -169,7 +168,7 @@ namespace {
     std::cout << "    hash functions:   " << pk.get()->filter_hash_count << std::endl;
     std::cout << "    num elements:     " << bloom_filter_size << std::endl;
     std::cout << "    bloomfilter size: " << pk.get()->filter_size << std::endl;
-    std::cout << "    correctness err:  " << FALSE_POSITIVE_PROB << std::endl;
+    std::cout << "    correctness err:  " << false_positive_prob << std::endl;
 
     nanoseconds encaps_time{0};
     for (unsigned int i = 0; i < REPEATS; ++i) {
@@ -215,21 +214,20 @@ namespace {
   }
 
   // ### TBFE BENCHMARK
-  void bench_tbfe() {
+  void bench_tbfe(unsigned int bloom_filter_size, double false_positive_prob, unsigned int height) {
     std::cout << "Running 'bench_tbfe' ...\n" << std::endl;
 
     /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
-    constexpr unsigned int bloom_filter_size = 1 << 9;
-    constexpr unsigned int total_depth       = 10 + 2;
+    unsigned int total_depth = height + 2;
 
     // key pair for time-interval 1
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
-                                                 FALSE_POSITIVE_PROB);
+                                                 false_positive_prob);
     auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
 
     // key pair for time-interval 10 (e.g. leaf)
     auto sk_leaf = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
-                                                      FALSE_POSITIVE_PROB);
+                                                      false_positive_prob);
     auto pk_leaf = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
     /* generate keys and puncture 'leaf secret key' 10 times */
     tbfe_bbg_keygen(pk_leaf.get(), sk_leaf.get());
@@ -248,7 +246,7 @@ namespace {
     std::cout << "    hash functions:   " << pk.get()->bloom_filter_hashes << std::endl;
     std::cout << "    num elements:     " << bloom_filter_size << std::endl;
     std::cout << "    bloomfilter size: " << pk.get()->bloom_filter_size << std::endl;
-    std::cout << "    correctness err:  " << FALSE_POSITIVE_PROB << std::endl;
+    std::cout << "    correctness err:  " << false_positive_prob << std::endl;
 
     std::cout << "\n<< BENCHMARKS (runtime as average of " << REPEATS << " runs) >>" << std::endl;
 
@@ -423,20 +421,21 @@ namespace {
     }
   };
 
-  void write_to_file(std::ofstream& ofs, const std::vector<bench_data>& data) {
+  void write_to_file(std::ofstream& ofs, double false_positive_prob,
+                     const std::vector<bench_data>& data) {
     ofs << "operation;interval;time;size\n";
     ofs << "arity;0;0;" << TBFE_ARITY << '\n';
-    ofs << "bf_prob;0;0;" << FALSE_POSITIVE_PROB << '\n';
+    ofs << "bf_prob;0;0;" << false_positive_prob << '\n';
     for (auto d : data) {
       ofs << d.operation << ';' << d.interval << ';' << d.time.count() << ';' << d.size << '\n';
     }
   }
 
-  void bench_tbfe_performance(unsigned int height) {
+  void bench_tbfe_performance(unsigned int bloom_filter_size, double false_positive_prob,
+                              unsigned int height) {
     std::cout << "Running 'bench_tbfe_performance' ...\n" << std::endl;
 
     /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
-    constexpr unsigned int bloom_filter_size = 1 << 9;
 
     constexpr unsigned int arity = TBFE_ARITY; // Get arity from config.h
     unsigned int total_depth     = height + 2;
@@ -444,7 +443,7 @@ namespace {
 
     // key pair
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
-                                                 FALSE_POSITIVE_PROB);
+                                                 false_positive_prob);
     auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
 
     /* benchmark key generation */
@@ -463,7 +462,7 @@ namespace {
     std::cout << "|    hash functions:   " << pk.get()->bloom_filter_hashes << std::endl;
     std::cout << "|    num elements:     " << bloom_filter_size << std::endl;
     std::cout << "|    bloomfilter size: " << pk.get()->bloom_filter_size << std::endl;
-    std::cout << "|    correctness err:  " << FALSE_POSITIVE_PROB << std::endl;
+    std::cout << "|    correctness err:  " << false_positive_prob << std::endl;
 
     std::cout << "|tree parameters:      " << std::endl;
     std::cout << "|    arity:            " << arity << std::endl;
@@ -615,28 +614,48 @@ namespace {
     // Write key sizes to csv file
     std::ofstream ofs{"tbfe_performance.csv", std::ios::app};
     std::sort(bench_data.begin(), bench_data.end());
-    write_to_file(ofs, bench_data);
+    write_to_file(ofs, false_positive_prob, bench_data);
   }
 } // namespace
 
 int main(int argc, char** argv) {
-  if (argc <= 1) {
-    bench_bfe();
-    bench_tbfe();
+  cxxopts::Options options{"bench", "(TB-)BFE benchmarks"};
+
+  /* n=2^19 >= 2^12 per day for 3 months, correctness error ~ 2^-10 */
+
+  options.add_options()("n,num-elements", "Number of elements to store in the Bloom filter",
+                        cxxopts::value<unsigned int>()->default_value("524288")) // == 2^19
+      ("prob", "False positive probability of the Bloom filter",
+       cxxopts::value<double>()->default_value("0.0009765625")) // == 2^-10
+      ("height", "Height of the TB-BFE tree", cxxopts::value<unsigned int>()->default_value("10"));
+  options.allow_unrecognised_options();
+
+  auto result = options.parse(argc, argv);
+  if (result.count("help")) {
+    std::cout << options.help() << std::endl;
     return 0;
   }
 
-  for (int i = 1; i < argc; ++i) {
-    std::string arg{argv[i]};
+  const auto unmatched = result.unmatched();
+  if (unmatched.size() < 1) {
+    bench_bfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
+    bench_tbfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
+               result["height"].as<unsigned int>());
+    return 0;
+  }
+
+  for (const auto& arg : unmatched) {
     if (arg == "bfe") {
-      bench_bfe();
+      bench_bfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
     } else if (arg == "tbfe") {
-      bench_tbfe();
+      bench_tbfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
+                 result["height"].as<unsigned int>());
     } else if (arg == "tbfe-perf") {
-      bench_tbfe_performance(3); // Use static height of 3 for now
+      bench_tbfe_performance(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
+                             result["height"].as<unsigned int>());
     } else {
-      std::cout << "Unknown benchmark: " << argv[i] << " - valid benchmarks are 'bfe' and 'tbfe'."
-                << std::endl;
+      std::cout << "Unknown benchmark: " << arg
+                << " - valid benchmarks are 'bfe', 'tbfe' and 'tbfe-perf'." << std::endl;
       return 1;
     }
   }

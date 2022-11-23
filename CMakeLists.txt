@@ -50,6 +50,7 @@ find_package(relic REQUIRED)
 find_package(Doxygen)
 find_package(OpenMP REQUIRED)
 find_package(OpenSSL REQUIRED)
+find_package(cxxopts)
 
 # generate config.h
 configure_file(config.h.in config.h)
@@ -122,13 +123,16 @@ if(DOXYGEN_FOUND)
 endif()
 
 # benchmarks
-add_executable(bench bench.cpp)
-target_link_libraries(bench PRIVATE bfe)
+if(cxxopts_FOUND)
+  add_executable(bench bench.cpp)
+  target_link_libraries(bench PRIVATE bfe cxxopts::cxxopts)
 
-if(LTO_SUPPORTED)
-  set_target_properties(bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+  if(LTO_SUPPORTED)
+    set_target_properties(bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+  endif()
+
+  target_include_directories(bench PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 endif()
-target_include_directories(bench PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # testing
 enable_testing()
