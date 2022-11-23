@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -213,6 +214,36 @@ namespace {
               << beautify_duration(punc_time / REPEATS) << std::endl;
   }
 
+  struct bench_data {
+    bench_data(std::string_view o, unsigned int i, nanoseconds t, size_t s)
+      : operation{o}, interval{i}, time{t}, size{s} {}
+
+    bench_data(std::string_view o, unsigned int i, nanoseconds t)
+      : operation{o}, interval{i}, time{t}, size{} {}
+
+    bench_data(std::string_view o, unsigned int i, size_t s)
+      : operation{o}, interval{i}, time{}, size{s} {}
+
+    std::string_view operation;
+    unsigned int interval;
+    nanoseconds time;
+    size_t size;
+
+    constexpr bool operator<(const bench_data& rhs) {
+      return std::make_tuple(operation, interval) < std::make_tuple(rhs.operation, rhs.interval);
+    }
+  };
+
+  void write_to_file(std::ofstream& ofs, double false_positive_prob,
+                     const std::vector<bench_data>& data) {
+    ofs << "operation;interval;time;size\n";
+    ofs << "arity;0;0;" << TBFE_ARITY << '\n';
+    ofs << "bf_prob;0;0;" << false_positive_prob << '\n';
+    for (auto d : data) {
+      ofs << d.operation << ';' << d.interval << ';' << d.time.count() << ';' << d.size << '\n';
+    }
+  }
+
   // ### TBFE BENCHMARK
   void bench_tbfe(unsigned int bloom_filter_size, double false_positive_prob, unsigned int height) {
     std::cout << "Running 'bench_tbfe' ...\n" << std::endl;
@@ -231,7 +262,7 @@ namespace {
     auto pk_leaf = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
     /* generate keys and puncture 'leaf secret key' 10 times */
     tbfe_bbg_keygen(pk_leaf.get(), sk_leaf.get());
-    for (unsigned int i = 2; i <= 10; i++) {
+    for (unsigned int i = 2; i <= height; i++) {
       tbfe_bbg_puncture_interval(sk_leaf.get(), pk_leaf.get(), i);
     }
 
@@ -250,6 +281,18 @@ namespace {
 
     std::cout << "\n<< BENCHMARKS (runtime as average of " << REPEATS << " runs) >>" << std::endl;
 
+    std::vector<bench_data> bench_data;
+    bench_data.emplace_back("bf_hashes", 0, nanoseconds{0}, pk.get()->bloom_filter_hashes);
+    bench_data.emplace_back("bf_size", 0, nanoseconds{0}, pk.get()->bloom_filter_size);
+    bench_data.emplace_back("height", 0, nanoseconds{0}, height);
+    bench_data.emplace_back("num_elements", 0, nanoseconds{0}, bloom_filter_size);
+    bench_data.emplace_back("num_intervals", 0, nanoseconds{0},
+                            ((pow(TBFE_ARITY, height + 1) - 1) / (TBFE_ARITY - 1)) - 1);
+
+    bench_data.emplace_back("keygen", 0, keygen_time, 0);
+    bench_data.emplace_back("sk size", 0, nanoseconds{0}, tbfe_bbg_secret_key_size(sk.get()));
+    bench_data.emplace_back("sk time size", 0, nanoseconds{0}, sk->sk_time->size);
+
     /* benchmark encaps */
     nanoseconds encaps_time{0};
     for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
@@ -261,6 +304,10 @@ namespace {
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         encaps_time += end_time - start_time;
+
+        bench_data.emplace_back("encaps", 1, end_time - start_time, 0);
+        bench_data.emplace_back("ctxt size", 1, nanoseconds{0},
+                                tbfe_bbg_ciphertext_size(ciphertext.get()));
       }
     }
     std::cout << "tbfe encaps:          "
@@ -281,6 +328,10 @@ namespace {
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         encaps_serialize_time += end_time - start_time;
+
+        bench_data.emplace_back("encaps and ser", 1, end_time - start_time, 0);
+        bench_data.emplace_back("ctxt size", 1, nanoseconds{0},
+                                tbfe_bbg_ciphertext_size(ciphertext.get()));
       }
     }
     std::cout << "tbfe encaps (+ ser):  "
@@ -294,10 +345,14 @@ namespace {
       auto ciphertext = make_holder<tbfe_bbg_ciphertext_t>(tbfe_bbg_init_ciphertext);
 
       start_time = high_resolution_clock::now();
-      tbfe_bbg_encaps(K, ciphertext.get(), pk_leaf.get(), 10);
+      tbfe_bbg_encaps(K, ciphertext.get(), pk_leaf.get(), height);
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         encaps_leaf_time += end_time - start_time;
+
+        bench_data.emplace_back("encaps leaf", height, end_time - start_time, 0);
+        bench_data.emplace_back("ctxt size", height, nanoseconds{0},
+                                tbfe_bbg_ciphertext_size(ciphertext.get()));
       }
     }
     std::cout << "tbfe encaps (leaf):   "
@@ -316,6 +371,7 @@ namespace {
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         decaps_time += end_time - start_time;
+        bench_data.emplace_back("decaps", 1, end_time - start_time, 0);
       }
     }
     std::cout << "tbfe decaps:          "
@@ -342,6 +398,7 @@ namespace {
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         decaps_serialize_time += end_time - start_time;
+        bench_data.emplace_back("decaps and ser", 1, end_time - start_time, 0);
       }
     }
     std::cout << "tbfe decaps (+ ser):  "
@@ -378,6 +435,7 @@ namespace {
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         punc_time += end_time - start_time;
+        bench_data.emplace_back("punc ctxt", 1, end_time - start_time, 0);
       }
     }
     std::cout << "tbfe punc:            "
@@ -393,43 +451,22 @@ namespace {
       end_time = high_resolution_clock::now();
       if (i >= WARMUP) {
         punc_interval_time += end_time - start_time;
+        bench_data.emplace_back("punc", time_interval, end_time - start_time, 0);
       }
     }
     std::cout << "tbfe punc (interval): "
               << duration_cast<microseconds>(punc_interval_time / REPEATS).count() << " µs - "
               << beautify_duration(punc_interval_time / REPEATS) << std::endl;
+
+    // Write key sizes to csv file
+    std::ostringstream oss;
+    oss << "tbfe_" << std::chrono::system_clock::now().time_since_epoch().count() << ".csc";
+    std::ofstream ofs{oss.str()};
+    std::sort(bench_data.begin(), bench_data.end());
+    write_to_file(ofs, false_positive_prob, bench_data);
   }
 
   // ### TBFE PERFORMANCE BENCHMARK
-  struct bench_data {
-    bench_data(std::string_view o, unsigned int i, nanoseconds t, size_t s)
-      : operation{o}, interval{i}, time{t}, size{s} {}
-
-    bench_data(std::string_view o, unsigned int i, nanoseconds t)
-      : operation{o}, interval{i}, time{t}, size{} {}
-
-    bench_data(std::string_view o, unsigned int i, size_t s)
-      : operation{o}, interval{i}, time{}, size{s} {}
-
-    std::string_view operation;
-    unsigned int interval;
-    nanoseconds time;
-    size_t size;
-
-    constexpr bool operator<(const bench_data& rhs) {
-      return std::make_tuple(operation, interval) < std::make_tuple(rhs.operation, rhs.interval);
-    }
-  };
-
-  void write_to_file(std::ofstream& ofs, double false_positive_prob,
-                     const std::vector<bench_data>& data) {
-    ofs << "operation;interval;time;size\n";
-    ofs << "arity;0;0;" << TBFE_ARITY << '\n';
-    ofs << "bf_prob;0;0;" << false_positive_prob << '\n';
-    for (auto d : data) {
-      ofs << d.operation << ';' << d.interval << ';' << d.time.count() << ';' << d.size << '\n';
-    }
-  }
 
   void bench_tbfe_performance(unsigned int bloom_filter_size, double false_positive_prob,
                               unsigned int height, unsigned int intervals) {
@@ -458,7 +495,7 @@ namespace {
               << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
     std::cout << "|tbfe keygen:          " << duration_cast<microseconds>(keygen_time).count()
-              << "| µs - " << beautify_duration(keygen_time) << std::endl;
+              << " µs - " << beautify_duration(keygen_time) << std::endl;
     std::cout << "|tbfe key parameters:" << std::endl;
     std::cout << "|    hash functions:   " << pk.get()->bloom_filter_hashes << std::endl;
     std::cout << "|    num elements:     " << bloom_filter_size << std::endl;
@@ -485,7 +522,7 @@ namespace {
     // Decaps failure counter --> check if (K == Kd)
     auto failures = 0;
     // Save min, max and total sum of sk key size
-    unsigned int size_sk_min       = UINT_MAX;
+    unsigned int size_sk_min       = std::numeric_limits<unsigned int>::max();
     unsigned int size_sk_max       = 0;
     unsigned int size_sk_sum       = 0;
     unsigned int size_sk_max_index = 1;
@@ -613,7 +650,10 @@ namespace {
     std::cout << std::endl;
 
     // Write key sizes to csv file
-    std::ofstream ofs{"tbfe_performance.csv", std::ios::app};
+    std::ostringstream oss;
+    oss << "tbfe_performance_" << std::chrono::system_clock::now().time_since_epoch().count()
+        << ".csc";
+    std::ofstream ofs{oss.str()};
     std::sort(bench_data.begin(), bench_data.end());
     write_to_file(ofs, false_positive_prob, bench_data);
   }
