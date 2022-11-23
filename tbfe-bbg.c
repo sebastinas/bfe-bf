@@ -33,6 +33,7 @@
 #include <limits.h>
 #include <math.h>
 #include <omp.h>
+#include <sodium/crypto_sign.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,17 +54,18 @@
 /* Add offset to bloom filter index --> BF identities start at (ARITY + 1) */
 #define BF_POS_TO_BF_ID(A) (A + ARITY + 1)
 
-/* Error codes for OpenSSL EVP */
-typedef enum {
-  EVP_FAILURE = 0, /**< An error occurred */
-  EVP_SUCCESS = 1, /**< All operations were successful */
-} evp_error_t;
-
 /* States if some BBG secret key is a bloom filter key or not */
 typedef enum {
   BLOOM_FILTER_KEY = 0, /**< Key is of type bbg bloom filter key */
   SECRET_KEY       = 1, /**< Key is of type bbg secret key */
 } key_type_t;
+
+/**
+ * EdDSA secret key
+ */
+typedef struct {
+  unsigned char key[crypto_sign_SECRETKEYBYTES];
+} eddsa_sk_t;
 
 /**
  * Represents a BBG HIBE identity in the tree.
@@ -272,28 +274,31 @@ bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_
 // ############## FUNCTION DEFINITIONS ##############
 // ##################################################
 
-/* >> OpenSSL EdDSA Signatures << */
+/* >> EdDSA Signatures << */
 /**
  * The following functions provide the interface to create and verify
  * signatures with EdDSA.
  */
 ///@{
 
+static_assert(crypto_sign_BYTES == Ed25519_SIG_BYTES);
+static_assert(crypto_sign_PUBLICKEYBYTES == Ed25519_KEY_BYTES);
+
 static void eddsa_clear_sk(eddsa_sk_t* eddsa_sk) {
   if (eddsa_sk) {
-    explicit_bzero(eddsa_sk->key, Ed25519_KEY_BYTES);
+    explicit_bzero(eddsa_sk->key, crypto_sign_SECRETKEYBYTES);
   }
 }
 
 static void eddsa_clear_pk(eddsa_pk_t* eddsa_pk) {
   if (eddsa_pk) {
-    memset(eddsa_pk->key, 0, Ed25519_KEY_BYTES);
+    memset(eddsa_pk->key, 0, crypto_sign_PUBLICKEYBYTES);
   }
 }
 
 static void eddsa_clear_sig(eddsa_sig_t* eddsa) {
   if (eddsa) {
-    memset(eddsa->sig, 0, Ed25519_SIG_BYTES);
+    memset(eddsa->sig, 0, crypto_sign_BYTES);
   }
 }
 
@@ -311,43 +316,8 @@ static int eddsa_keygen(eddsa_sk_t* eddsa_sk, eddsa_pk_t* eddsa_pk) {
     return BFE_ERROR_INVALID_PARAM;
   }
 
-  int result_status = BFE_SUCCESS;
-
-  EVP_PKEY* pkey     = NULL; // Generate new KeyPair
-  EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
-  if (!pctx) {
-    return BFE_ERROR;
-  }
-
-  if (EVP_PKEY_keygen_init(pctx) <= 0) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
-  if (EVP_PKEY_keygen(pctx, &pkey) <= 0) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
-  size_t key_len = Ed25519_KEY_BYTES;
-  // Extract raw public key
-  if (EVP_PKEY_get_raw_public_key(pkey, eddsa_pk->key, &key_len) == EVP_FAILURE ||
-      key_len != Ed25519_KEY_BYTES) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
-  // Extract raw private key
-  if (EVP_PKEY_get_raw_private_key(pkey, eddsa_sk->key, &key_len) == EVP_FAILURE ||
-      key_len != Ed25519_KEY_BYTES) {
-    result_status = BFE_ERROR;
-  }
-
-clean:
-  EVP_PKEY_CTX_free(pctx);
-  EVP_PKEY_free(pkey);
-
-  return result_status;
+  crypto_sign_keypair(eddsa_pk->key, eddsa_sk->key);
+  return BFE_SUCCESS;
 }
 
 /**
@@ -380,36 +350,8 @@ static int eddsa_sign(eddsa_sig_t* eddsa, vector_t* ciphertexts, eddsa_sk_t* edd
   uint8_t hash_buf[64];
   Keccak_HashSqueeze(&ctx, hash_buf, 64 * 8);
 
-  EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
-  if (!md_ctx) {
-    return BFE_ERROR;
-  }
-
-  // Create a EVP_PKEY data element from the raw private key information
-  EVP_PKEY* pkey =
-      EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, eddsa_sk->key, Ed25519_KEY_BYTES);
-  if (!pkey) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
-  // Setup the signature
-  if (EVP_DigestSignInit(md_ctx, NULL, NULL, NULL, pkey) == EVP_FAILURE) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
-  // Sign hash
-  size_t sig_len = Ed25519_SIG_BYTES;
-  int evp_status = EVP_DigestSign(md_ctx, eddsa->sig, &sig_len, hash_buf, order_size);
-
-  if (evp_status == EVP_FAILURE || sig_len != Ed25519_SIG_BYTES) {
-    result_status = BFE_ERROR;
-  }
-
-clean:
-  EVP_PKEY_free(pkey);
-  EVP_MD_CTX_free(md_ctx);
+  // Sign the hash
+  crypto_sign_detached(eddsa->sig, NULL, hash_buf, sizeof(hash_buf), eddsa_sk->key);
 
   return result_status;
 }
@@ -443,34 +385,10 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
   uint8_t hash_buf[64];
   Keccak_HashSqueeze(&ctx, hash_buf, 64 * 8);
 
-  EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
-  if (!md_ctx) {
-    return BFE_ERROR;
-  }
-
-  // Create a EVP_PKEY data element from the raw public key information
-  EVP_PKEY* pkey =
-      EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, eddsa_pk->key, Ed25519_KEY_BYTES);
-  if (!pkey) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
-  // Setup verification
-  if (EVP_DigestVerifyInit(md_ctx, NULL, NULL, NULL, pkey) == EVP_FAILURE) {
-    result_status = BFE_ERROR;
-    goto clean;
-  }
-
   // Verify signature
-  if (EVP_DigestVerify(md_ctx, eddsa->sig, Ed25519_SIG_BYTES, hash_buf, order_size) ==
-      EVP_FAILURE) {
+  if (crypto_sign_verify_detached(eddsa->sig, hash_buf, sizeof(hash_buf), eddsa_pk->key) != 0) {
     result_status = BFE_ERROR;
   }
-
-clean:
-  EVP_PKEY_free(pkey);
-  EVP_MD_CTX_free(md_ctx);
 
   return result_status;
 }
@@ -1006,7 +924,7 @@ static void bbg_hash_eddsa_pk(bn_t hash, eddsa_pk_t* eddsa_pk) {
   Keccak_HashInstance ctx;
   Keccak_HashInitialize_SHAKE256(&ctx);
   Keccak_HashUpdate(&ctx, &VERIFICATION_PREFIX, sizeof(VERIFICATION_PREFIX) * 8);
-  Keccak_HashUpdate(&ctx, eddsa_pk->key, Ed25519_KEY_BYTES * 8);
+  Keccak_HashUpdate(&ctx, eddsa_pk->key, crypto_sign_PUBLICKEYBYTES * 8);
   Keccak_HashFinal(&ctx, NULL);
   hash_squeeze_zp(hash, &ctx);
 }
@@ -1760,11 +1678,11 @@ int tbfe_bbg_ciphertext_deserialize(tbfe_bbg_ciphertext_t* ciphertext, const uin
   memcpy(ciphertext->c, src, SECURITY_PARAMETER);
   src += SECURITY_PARAMETER;
 
-  memcpy(ciphertext->eddsa.sig, src, Ed25519_SIG_BYTES);
-  src += Ed25519_SIG_BYTES;
+  memcpy(ciphertext->eddsa.sig, src, crypto_sign_BYTES);
+  src += crypto_sign_BYTES;
 
-  memcpy(ciphertext->eddsa_pk.key, src, Ed25519_KEY_BYTES);
-  src += Ed25519_KEY_BYTES;
+  memcpy(ciphertext->eddsa_pk.key, src, crypto_sign_PUBLICKEYBYTES);
+  src += crypto_sign_PUBLICKEYBYTES;
 
   return BFE_SUCCESS;
 }
@@ -1904,11 +1822,11 @@ void tbfe_bbg_ciphertext_serialize(uint8_t* serialized, tbfe_bbg_ciphertext_t* c
   memcpy(serialized, ciphertext->c, SECURITY_PARAMETER);
   serialized += SECURITY_PARAMETER;
 
-  memcpy(serialized, ciphertext->eddsa.sig, Ed25519_SIG_BYTES);
-  serialized += Ed25519_SIG_BYTES;
+  memcpy(serialized, ciphertext->eddsa.sig, crypto_sign_BYTES);
+  serialized += crypto_sign_BYTES;
 
-  memcpy(serialized, ciphertext->eddsa_pk.key, Ed25519_KEY_BYTES);
-  serialized += Ed25519_KEY_BYTES;
+  memcpy(serialized, ciphertext->eddsa_pk.key, crypto_sign_PUBLICKEYBYTES);
+  serialized += crypto_sign_PUBLICKEYBYTES;
 }
 
 unsigned tbfe_bbg_public_key_size(const tbfe_bbg_public_key_t* public_key) {
@@ -1938,7 +1856,7 @@ unsigned tbfe_bbg_secret_key_size(const tbfe_bbg_secret_key_t* secret_key) {
 unsigned tbfe_bbg_ciphertext_size(const tbfe_bbg_ciphertext_t* ciphertext) {
   const unsigned int ciphertext_count = vector_size(ciphertext->Cs);
   return sizeof(uint32_t) + sizeof(uint32_t) + (ciphertext_count * BBG_CIPHERTEXT_SIZE) +
-         SECURITY_PARAMETER + Ed25519_SIG_BYTES + Ed25519_KEY_BYTES;
+         SECURITY_PARAMETER + crypto_sign_BYTES + crypto_sign_PUBLICKEYBYTES;
 }
 
 /**
@@ -2755,6 +2673,6 @@ bool tbfe_bbg_ciphertexts_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertex
 }
 
 bool tbfe_bbg_eddsa_sig_are_equal(tbfe_bbg_ciphertext_t* l, tbfe_bbg_ciphertext_t* r) {
-  return memcmp(l->eddsa.sig, r->eddsa.sig, Ed25519_SIG_BYTES) == 0;
+  return memcmp(l->eddsa.sig, r->eddsa.sig, crypto_sign_BYTES) == 0;
 }
 #endif

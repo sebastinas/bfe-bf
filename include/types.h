@@ -16,9 +16,6 @@
 #include <omp.h>
 #include <relic/relic.h>
 
-#include <openssl/evp.h>
-#include <openssl/pem.h>
-
 #define SECURITY_PARAMETER 32
 
 // Size of EdDSA keys in bytes (32 bytes -> 256 bits)
@@ -97,13 +94,6 @@ typedef struct {
 typedef struct {
   unsigned char key[Ed25519_KEY_BYTES]; /**< Unsigned byte array containing the RAW public key */
 } eddsa_pk_t;
-
-/**
- * EdDSA secret key
- */
-typedef struct {
-  unsigned char key[Ed25519_KEY_BYTES]; /**< Unsigned byte array containing the RAW private key */
-} eddsa_sk_t;
 
 /**
  * EdDSA Signature
