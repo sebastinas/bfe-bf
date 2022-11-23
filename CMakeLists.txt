@@ -15,7 +15,7 @@ project(bfe LANGUAGES C CXX VERSION 2.0 DESCRIPTION "Bloom Filter Encryption lib
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # settings
@@ -67,13 +67,15 @@ list(APPEND BFE_SOURCES
 add_library(bfe SHARED ${BFE_SOURCES})
 add_library(bfe_static STATIC ${BFE_SOURCES})
 target_compile_definitions(bfe_static PRIVATE BFE_STATIC)
-if (LTO_SUPPORTED)
+
+if(LTO_SUPPORTED)
   set_target_properties(bfe_static PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 
 set_target_properties(bfe PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(bfe PROPERTIES C_VISIBILITY_PRESET hidden)
-if (LTO_SUPPORTED)
+
+if(LTO_SUPPORTED)
   set_target_properties(bfe PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 
@@ -122,7 +124,8 @@ endif()
 # benchmarks
 add_executable(bench bench.cpp)
 target_link_libraries(bench PRIVATE bfe)
-if (LTO_SUPPORTED)
+
+if(LTO_SUPPORTED)
   set_target_properties(bench PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 target_include_directories(bench PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
