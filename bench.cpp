@@ -1,5 +1,6 @@
 #include <config.h>
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <fstream>
