@@ -432,7 +432,7 @@ namespace {
   }
 
   void bench_tbfe_performance(unsigned int bloom_filter_size, double false_positive_prob,
-                              unsigned int height) {
+                              unsigned int height, unsigned int intervals) {
     std::cout << "Running 'bench_tbfe_performance' ...\n" << std::endl;
 
     /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
@@ -440,6 +440,7 @@ namespace {
     constexpr unsigned int arity = TBFE_ARITY; // Get arity from config.h
     unsigned int total_depth     = height + 2;
     unsigned int num_intervals   = ((pow(arity, height + 1) - 1) / (arity - 1)) - 1;
+    intervals                    = std::min(intervals, num_intervals);
 
     // key pair
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
@@ -490,9 +491,9 @@ namespace {
     unsigned int size_sk_max_index = 1;
     unsigned int size_sk_min_index = 1;
     // Record size of sk at every interval
-    std::vector<unsigned int> size_sk(num_intervals);
+    std::vector<unsigned int> size_sk(intervals);
     // Record size of sk_time at every interval
-    std::vector<unsigned int> sk_time_size(num_intervals);
+    std::vector<unsigned int> sk_time_size(intervals);
     std::vector<bench_data> bench_data;
 
     std::cout << "|          << RUNNING BENCHMARK >>" << std::endl;
@@ -534,7 +535,7 @@ namespace {
       ++failures;
     }
 
-    for (unsigned int i = 2; i <= num_intervals; ++i) {
+    for (unsigned int i = 2; i <= intervals; ++i) {
       // 3.) Puncture interval i
       start_time = high_resolution_clock::now();
       status |= tbfe_bbg_puncture_interval(sk.get(), pk.get(), i);
@@ -592,19 +593,19 @@ namespace {
               << " bytes @ index = " << size_sk_min_index << std::endl;
     std::cout << "|size sk (max):        " << size_sk_max
               << " bytes @ index = " << size_sk_max_index << std::endl;
-    std::cout << "|size sk (avg):        " << size_sk_sum / num_intervals << " bytes" << std::endl;
+    std::cout << "|size sk (avg):        " << size_sk_sum / intervals << " bytes" << std::endl;
     std::cout << "|-----------------------------------------------" << std::endl;
     std::cout << "|status==BFE_SUCCESS?  " << (status == BFE_SUCCESS) << std::endl;
     std::cout << "|failed decaps:        " << failures << std::endl;
     std::cout << "|tbfe encaps (avg):    "
-              << duration_cast<microseconds>(encaps_time / num_intervals).count() << " µs - "
-              << beautify_duration(encaps_time / num_intervals) << std::endl;
+              << duration_cast<microseconds>(encaps_time / intervals).count() << " µs - "
+              << beautify_duration(encaps_time / intervals) << std::endl;
     std::cout << "|tbfe decaps (avg):    "
-              << duration_cast<microseconds>(decaps_time / num_intervals).count() << " µs - "
-              << beautify_duration(decaps_time / num_intervals) << std::endl;
+              << duration_cast<microseconds>(decaps_time / intervals).count() << " µs - "
+              << beautify_duration(decaps_time / intervals) << std::endl;
     std::cout << "|tbfe punc (avg):      "
-              << duration_cast<microseconds>(puncture_time / (num_intervals - 1)).count()
-              << " µs - " << beautify_duration(puncture_time / (num_intervals - 1)) << std::endl;
+              << duration_cast<microseconds>(puncture_time / (intervals - 1)).count() << " µs - "
+              << beautify_duration(puncture_time / (intervals - 1)) << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
     std::cout << "|  << BENCHMARK RUNTIME :   " << beautify_duration(run_time) << " >>"
               << std::endl;
@@ -627,7 +628,9 @@ int main(int argc, char** argv) {
                         cxxopts::value<unsigned int>()->default_value("524288")) // == 2^19
       ("prob", "False positive probability of the Bloom filter",
        cxxopts::value<double>()->default_value("0.0009765625")) // == 2^-10
-      ("height", "Height of the TB-BFE tree", cxxopts::value<unsigned int>()->default_value("10"));
+      ("height", "Height of the TB-BFE tree", cxxopts::value<unsigned int>()->default_value("10"))(
+          "intervals", "Number of intervals to test in TB-BFE tree",
+          cxxopts::value<unsigned int>())("h,help", "Print usage");
   options.allow_unrecognised_options();
 
   auto result = options.parse(argc, argv);
@@ -651,8 +654,12 @@ int main(int argc, char** argv) {
       bench_tbfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
                  result["height"].as<unsigned int>());
     } else if (arg == "tbfe-perf") {
+      unsigned int intervals = result["intervals"].count()
+                                   ? result["intervals"].as<unsigned int>()
+                                   : (result["height"].as<unsigned int>() * 2);
+
       bench_tbfe_performance(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
-                             result["height"].as<unsigned int>());
+                             result["height"].as<unsigned int>(), intervals);
     } else {
       std::cout << "Unknown benchmark: " << arg
                 << " - valid benchmarks are 'bfe', 'tbfe' and 'tbfe-perf'." << std::endl;
