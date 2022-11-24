@@ -348,7 +348,7 @@ static int eddsa_sign(eddsa_sig_t* eddsa, vector_t* ciphertexts, eddsa_sk_t* edd
   hash_update_tbfe_public_key(&ctx, pk); // Add public key to hash
   Keccak_HashFinal(&ctx, NULL);
   uint8_t hash_buf[64];
-  Keccak_HashSqueeze(&ctx, hash_buf, 64 * 8);
+  Keccak_HashSqueeze(&ctx, hash_buf, sizeof(hash_buf) * 8);
 
   // Sign the hash
   crypto_sign_detached(eddsa->sig, NULL, hash_buf, sizeof(hash_buf), eddsa_sk->key);
@@ -383,7 +383,7 @@ static int eddsa_verify(vector_t* ciphertexts, eddsa_sig_t* eddsa, eddsa_pk_t* e
   hash_update_tbfe_public_key(&ctx, pk); // Add public key to hash
   Keccak_HashFinal(&ctx, NULL);
   uint8_t hash_buf[64];
-  Keccak_HashSqueeze(&ctx, hash_buf, 64 * 8);
+  Keccak_HashSqueeze(&ctx, hash_buf, sizeof(hash_buf) * 8);
 
   // Verify signature
   if (crypto_sign_verify_detached(eddsa->sig, hash_buf, sizeof(hash_buf), eddsa_pk->key) != 0) {
