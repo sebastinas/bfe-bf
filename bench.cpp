@@ -245,7 +245,8 @@ namespace {
   }
 
   // ### TBFE BENCHMARK
-  void bench_tbfe(unsigned int bloom_filter_size, double false_positive_prob, unsigned int height) {
+  void bench_tbfe(const std::string& filename, unsigned int bloom_filter_size,
+                  double false_positive_prob, unsigned int height) {
     std::cout << "Running 'bench_tbfe' ...\n" << std::endl;
 
     /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
@@ -459,17 +460,16 @@ namespace {
               << beautify_duration(punc_interval_time / REPEATS) << std::endl;
 
     // Write key sizes to csv file
-    std::ostringstream oss;
-    oss << "tbfe_" << std::chrono::system_clock::now().time_since_epoch().count() << ".csc";
-    std::ofstream ofs{oss.str()};
+    std::ofstream ofs{filename};
     std::sort(bench_data.begin(), bench_data.end());
     write_to_file(ofs, false_positive_prob, bench_data);
   }
 
   // ### TBFE PERFORMANCE BENCHMARK
 
-  void bench_tbfe_performance(unsigned int bloom_filter_size, double false_positive_prob,
-                              unsigned int height, unsigned int intervals) {
+  void bench_tbfe_performance(const std::string& filename, unsigned int bloom_filter_size,
+                              double false_positive_prob, unsigned int height,
+                              unsigned int intervals) {
     std::cout << "Running 'bench_tbfe_performance' ...\n" << std::endl;
 
     /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
@@ -650,10 +650,7 @@ namespace {
     std::cout << std::endl;
 
     // Write key sizes to csv file
-    std::ostringstream oss;
-    oss << "tbfe_performance_" << std::chrono::system_clock::now().time_since_epoch().count()
-        << ".csc";
-    std::ofstream ofs{oss.str()};
+    std::ofstream ofs{filename};
     std::sort(bench_data.begin(), bench_data.end());
     write_to_file(ofs, false_positive_prob, bench_data);
   }
@@ -670,7 +667,8 @@ int main(int argc, char** argv) {
        cxxopts::value<double>()->default_value("0.0009765625")) // == 2^-10
       ("height", "Height of the TB-BFE tree", cxxopts::value<unsigned int>()->default_value("10"))(
           "intervals", "Number of intervals to test in TB-BFE tree",
-          cxxopts::value<unsigned int>())("h,help", "Print usage");
+          cxxopts::value<unsigned int>())("o,output", "Path of the output file",
+                                          cxxopts::value<std::string>())("h,help", "Print usage");
   options.allow_unrecognised_options();
 
   auto result = options.parse(argc, argv);
@@ -679,10 +677,19 @@ int main(int argc, char** argv) {
     return 0;
   }
 
+  std::string filename;
+  if (result.count("output")) {
+    filename = result["output"].as<std::string>();
+  } else {
+    std::ostringstream oss;
+    oss << "bench_" << std::chrono::system_clock::now().time_since_epoch().count() << ".csv";
+    filename = oss.str();
+  }
+
   const auto unmatched = result.unmatched();
   if (unmatched.size() < 1) {
     bench_bfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
-    bench_tbfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
+    bench_tbfe(filename, result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
                result["height"].as<unsigned int>());
     return 0;
   }
@@ -691,15 +698,16 @@ int main(int argc, char** argv) {
     if (arg == "bfe") {
       bench_bfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
     } else if (arg == "tbfe") {
-      bench_tbfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
+      bench_tbfe(filename, result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
                  result["height"].as<unsigned int>());
     } else if (arg == "tbfe-perf") {
       unsigned int intervals = result["intervals"].count()
                                    ? result["intervals"].as<unsigned int>()
                                    : (result["height"].as<unsigned int>() * 2);
 
-      bench_tbfe_performance(result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
-                             result["height"].as<unsigned int>(), intervals);
+      bench_tbfe_performance(filename, result["num-elements"].as<unsigned int>(),
+                             result["prob"].as<double>(), result["height"].as<unsigned int>(),
+                             intervals);
     } else {
       std::cout << "Unknown benchmark: " << arg
                 << " - valid benchmarks are 'bfe', 'tbfe' and 'tbfe-perf'." << std::endl;
