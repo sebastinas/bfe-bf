@@ -82,17 +82,17 @@ endif()
 
 configure_file(bfe.pc.in bfe.pc @ONLY)
 
-target_link_libraries(bfe PUBLIC ${RELIC_LIBRARY})
+target_link_libraries(bfe PRIVATE relic::relic)
 target_link_libraries(bfe PRIVATE m)
-target_include_directories(bfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
+target_include_directories(bfe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(bfe PRIVATE OpenMP::OpenMP_C)
-target_link_libraries(bfe PUBLIC ${LIBSODIUM_LIBRARY})
+target_link_libraries(bfe PRIVATE libsodium::sodium)
 
-target_link_libraries(bfe_static PUBLIC ${RELIC_LIBRARY})
+target_link_libraries(bfe_static PUBLIC relic::relic)
 target_link_libraries(bfe_static PUBLIC m)
-target_include_directories(bfe_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${RELIC_INCLUDE_DIR})
+target_include_directories(bfe_static PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(bfe_static PUBLIC OpenMP::OpenMP_C)
-target_link_libraries(bfe_static PUBLIC ${LIBSODIUM_LIBRARY})
+target_link_libraries(bfe_static PUBLIC libsodium::sodium)
 
 install(TARGETS bfe
         EXPORT bfe-targets
