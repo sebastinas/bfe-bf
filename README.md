@@ -11,6 +11,7 @@ Dependencies
 
 The BFE library requires the following dependencies:
 * [relic](https://github.com/relic-toolkit/relic)
+* [libsodium](https://libsodium.gitbook.io/doc/)
 * [doxygen](http://www.doxygen.nl/index.html) (optional, for documentation)
 * [cgreen](https://github.com/cgreen-devs/cgreen) (optional, for tests)
 
