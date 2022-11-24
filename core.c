@@ -13,7 +13,9 @@ static bn_t one;
 unsigned int order_size;
 
 __attribute__((constructor)) static void init_relic(void) {
-  sodium_init();
+  if (sodium_init() == -1) {
+    // TODO: handle!
+  }
 
   if (!core_get()) {
     core_init();
