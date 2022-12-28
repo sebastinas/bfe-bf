@@ -157,65 +157,6 @@ namespace {
     return ss.str();
   }
 
-  // ### BFE BENCHMARK
-  void bench_bfe(unsigned int bloom_filter_size, double false_positive_prob) {
-    auto sk = make_holder<bfe_bf_secret_key_t>(bfe_bf_init_secret_key);
-    auto pk = make_holder<bfe_bf_public_key_t>(bfe_bf_init_public_key);
-
-    auto start_time = high_resolution_clock::now();
-    bfe_bf_keygen(pk.get(), sk.get(), 32, bloom_filter_size, false_positive_prob);
-    auto keygen_time = high_resolution_clock::now() - start_time;
-    std::cout << "bfe keygen:           " << duration_cast<microseconds>(keygen_time).count()
-              << " µs" << std::endl;
-    std::cout << "bfe key parameters:" << std::endl;
-    std::cout << "    hash functions:   " << pk.get()->filter_hash_count << std::endl;
-    std::cout << "    num elements:     " << bloom_filter_size << std::endl;
-    std::cout << "    bloomfilter size: " << pk.get()->filter_size << std::endl;
-    std::cout << "    correctness err:  " << false_positive_prob << std::endl;
-
-    nanoseconds encaps_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
-      key_buffer key;
-      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, pk.get());
-
-      start_time = high_resolution_clock::now();
-      bfe_bf_encaps(ciphertext.get(), key.data(), pk.get());
-      encaps_time += high_resolution_clock::now() - start_time;
-    }
-    std::cout << "bfe encaps:           "
-              << duration_cast<microseconds>(encaps_time / REPEATS).count() << " µs - "
-              << beautify_duration(encaps_time / REPEATS) << std::endl;
-
-    nanoseconds decaps_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
-      key_buffer key;
-      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, pk.get());
-      bfe_bf_encaps(ciphertext.get(), key.data(), pk.get());
-
-      uint8_t decrypted[32];
-      start_time = high_resolution_clock::now();
-      bfe_bf_decaps(decrypted, pk.get(), sk.get(), ciphertext.get());
-      decaps_time += high_resolution_clock::now() - start_time;
-    }
-    std::cout << "bfe decaps:           "
-              << duration_cast<microseconds>(decaps_time / REPEATS).count() << " µs - "
-              << beautify_duration(decaps_time / REPEATS) << std::endl;
-
-    nanoseconds punc_time{0};
-    for (unsigned int i = 0; i < REPEATS; ++i) {
-      key_buffer key;
-      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, pk.get());
-      bfe_bf_encaps(ciphertext.get(), key.data(), pk.get());
-
-      start_time = high_resolution_clock::now();
-      bfe_bf_puncture(sk.get(), ciphertext.get());
-      punc_time += high_resolution_clock::now() - start_time;
-    }
-    std::cout << "bfe punc:             "
-              << duration_cast<microseconds>(punc_time / REPEATS).count() << " µs - "
-              << beautify_duration(punc_time / REPEATS) << std::endl;
-  }
-
   struct bench_data {
     bench_data(std::string_view o, unsigned int i, nanoseconds t, size_t s)
       : operation{o}, interval{i}, time{t}, size{s} {}
@@ -246,6 +187,87 @@ namespace {
     }
   }
 
+  // ### BFE BENCHMARK
+  void bench_bfe(const std::string& filename, unsigned int bloom_filter_size,
+                 double false_positive_prob) {
+    auto sk = make_holder<bfe_bf_secret_key_t>(bfe_bf_init_secret_key);
+    auto pk = make_holder<bfe_bf_public_key_t>(bfe_bf_init_public_key);
+
+    auto start_time = high_resolution_clock::now();
+    bfe_bf_keygen(pk.get(), sk.get(), 32, bloom_filter_size, false_positive_prob);
+    auto keygen_time = high_resolution_clock::now() - start_time;
+    std::cout << "bfe keygen:           " << duration_cast<microseconds>(keygen_time).count()
+              << " µs" << std::endl;
+    std::cout << "bfe key parameters:" << std::endl;
+    std::cout << "    hash functions:   " << pk.get()->filter_hash_count << std::endl;
+    std::cout << "    num elements:     " << bloom_filter_size << std::endl;
+    std::cout << "    bloomfilter size: " << pk.get()->filter_size << std::endl;
+    std::cout << "    correctness err:  " << false_positive_prob << std::endl;
+
+    std::vector<bench_data> bench_data;
+    bench_data.emplace_back("bf_hashes", 0, nanoseconds{0}, pk.get()->filter_hash_count);
+    bench_data.emplace_back("bf_size", 0, nanoseconds{0}, pk.get()->filter_size);
+    bench_data.emplace_back("num_elements", 0, nanoseconds{0}, bloom_filter_size);
+
+    bench_data.emplace_back("keygen", 0, keygen_time, 0);
+    bench_data.emplace_back("sk size", 0, nanoseconds{0}, bfe_bf_secret_key_size(sk.get()));
+
+    nanoseconds encaps_time{0};
+    for (unsigned int i = 0; i < REPEATS; ++i) {
+      key_buffer key;
+      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, pk.get());
+
+      start_time = high_resolution_clock::now();
+      bfe_bf_encaps(ciphertext.get(), key.data(), pk.get());
+      auto end_time = high_resolution_clock::now();
+
+      encaps_time += end_time - start_time;
+      bench_data.emplace_back("encaps", 0, end_time - start_time, 0);
+    }
+    std::cout << "bfe encaps:           "
+              << duration_cast<microseconds>(encaps_time / REPEATS).count() << " µs - "
+              << beautify_duration(encaps_time / REPEATS) << std::endl;
+
+    nanoseconds decaps_time{0};
+    for (unsigned int i = 0; i < REPEATS; ++i) {
+      key_buffer key;
+      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, pk.get());
+      bfe_bf_encaps(ciphertext.get(), key.data(), pk.get());
+
+      uint8_t decrypted[32];
+      start_time = high_resolution_clock::now();
+      bfe_bf_decaps(decrypted, pk.get(), sk.get(), ciphertext.get());
+      auto end_time = high_resolution_clock::now();
+
+      decaps_time += end_time - start_time;
+      bench_data.emplace_back("decaps", 0, end_time - start_time, 0);
+    }
+    std::cout << "bfe decaps:           "
+              << duration_cast<microseconds>(decaps_time / REPEATS).count() << " µs - "
+              << beautify_duration(decaps_time / REPEATS) << std::endl;
+
+    nanoseconds punc_time{0};
+    for (unsigned int i = 0; i < REPEATS; ++i) {
+      key_buffer key;
+      auto ciphertext = make_holder<bfe_bf_ciphertext_t>(bfe_bf_init_ciphertext, pk.get());
+      bfe_bf_encaps(ciphertext.get(), key.data(), pk.get());
+
+      start_time = high_resolution_clock::now();
+      bfe_bf_puncture(sk.get(), ciphertext.get());
+      auto end_time = high_resolution_clock::now();
+
+      punc_time += end_time - start_time;
+      bench_data.emplace_back("punc", 0, end_time - start_time, 0);
+    }
+    std::cout << "bfe punc:             "
+              << duration_cast<microseconds>(punc_time / REPEATS).count() << " µs - "
+              << beautify_duration(punc_time / REPEATS) << std::endl;
+
+    std::ofstream ofs{filename};
+    std::sort(bench_data.begin(), bench_data.end());
+    write_to_file(ofs, false_positive_prob, bench_data);
+  }
+
   // ### TBFE BENCHMARK
   void bench_tbfe(const std::string& filename, unsigned int bloom_filter_size,
                   double false_positive_prob, unsigned int height) {
@@ -259,6 +281,7 @@ namespace {
                                                  false_positive_prob);
     auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
 
+#if 0
     // key pair for time-interval 10 (e.g. leaf)
     auto sk_leaf = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
                                                       false_positive_prob);
@@ -268,6 +291,7 @@ namespace {
     for (unsigned int i = 2; i <= height; i++) {
       tbfe_bbg_puncture_interval(sk_leaf.get(), pk_leaf.get(), i);
     }
+#endif
 
     /* benchmark key generation */
     auto start_time = high_resolution_clock::now();
@@ -341,6 +365,7 @@ namespace {
               << duration_cast<microseconds>(encaps_serialize_time / REPEATS).count() << " µs - "
               << beautify_duration(encaps_serialize_time / REPEATS) << std::endl;
 
+#if 0
     /* benchmark encaps leaf*/
     nanoseconds encaps_leaf_time{0};
     for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
@@ -361,6 +386,7 @@ namespace {
     std::cout << "tbfe encaps (leaf):   "
               << duration_cast<microseconds>(encaps_leaf_time / REPEATS).count() << " µs - "
               << beautify_duration(encaps_leaf_time / REPEATS) << std::endl;
+#endif
 
     /* benchmark decaps */
     nanoseconds decaps_time{0};
@@ -408,6 +434,7 @@ namespace {
               << duration_cast<microseconds>(decaps_serialize_time / REPEATS).count() << " µs - "
               << beautify_duration(decaps_serialize_time / REPEATS) << std::endl;
 
+#if 0
     /* benchmark decaps leaf */
     nanoseconds decaps_leaf_time{0};
     for (unsigned int i = 0; i < (REPEATS + WARMUP); ++i) {
@@ -425,6 +452,7 @@ namespace {
     std::cout << "tbfe decaps (leaf):   "
               << duration_cast<microseconds>(decaps_leaf_time / REPEATS).count() << " µs - "
               << beautify_duration(decaps_leaf_time / REPEATS) << std::endl;
+#endif
 
     /* benchmark puncture ctx */
     nanoseconds punc_time{0};
@@ -448,7 +476,7 @@ namespace {
     /* benchmark puncture interval */
     nanoseconds punc_interval_time{0};
     unsigned int time_interval = 1;
-    for (unsigned int i = 0; i < (WARMUP + REPEATS); ++i, ++time_interval) {
+    for (unsigned int i = WARMUP; i < WARMUP + 2; ++i, ++time_interval) {
       start_time = high_resolution_clock::now();
       tbfe_bbg_puncture_interval(sk.get(), pk.get(), time_interval);
       end_time = high_resolution_clock::now();
@@ -458,8 +486,8 @@ namespace {
       }
     }
     std::cout << "tbfe punc (interval): "
-              << duration_cast<microseconds>(punc_interval_time / REPEATS).count() << " µs - "
-              << beautify_duration(punc_interval_time / REPEATS) << std::endl;
+              << duration_cast<microseconds>(punc_interval_time).count() << " µs - "
+              << beautify_duration(punc_interval_time) << std::endl;
 
     // Write key sizes to csv file
     std::ofstream ofs{filename};
@@ -474,27 +502,22 @@ namespace {
                               unsigned int intervals) {
     std::cout << "Running 'bench_tbfe_performance' ...\n" << std::endl;
 
-    /* n=2^9, depth = 2^10 =>  2 * 2^9 per day for 17 months, correctness error ~ 2^-10 */
+    unsigned int total_depth   = height + 2;
+    unsigned int num_intervals = ((pow(TBFE_ARITY, height + 1) - 1) / (TBFE_ARITY - 1)) - 1;
+    intervals                  = std::min(intervals, num_intervals);
 
-    constexpr unsigned int arity = TBFE_ARITY; // Get arity from config.h
-    unsigned int total_depth     = height + 2;
-    unsigned int num_intervals   = ((pow(arity, height + 1) - 1) / (arity - 1)) - 1;
-    intervals                    = std::min(intervals, num_intervals);
-
-    // key pair
     auto sk = make_holder<tbfe_bbg_secret_key_t>(tbfe_bbg_init_secret_key, bloom_filter_size,
                                                  false_positive_prob);
     auto pk = make_holder<tbfe_bbg_public_key_t>(tbfe_bbg_init_public_key, total_depth);
 
-    /* benchmark key generation */
+    // benchmark key generation
     auto start_time = high_resolution_clock::now();
     tbfe_bbg_keygen(pk.get(), sk.get());
     auto keygen_time = high_resolution_clock::now() - start_time;
 
-    /* Print some stats */
     std::cout << "------------------------------------------------" << std::endl;
-    std::cout << "|############# ARITY " << arity << " ; HEIGHT " << height << " ##############"
-              << std::endl;
+    std::cout << "|############# ARITY " << TBFE_ARITY << " ; HEIGHT " << height
+              << " ##############" << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
     std::cout << "|tbfe keygen:          " << duration_cast<microseconds>(keygen_time).count()
               << " µs - " << beautify_duration(keygen_time) << std::endl;
@@ -505,7 +528,7 @@ namespace {
     std::cout << "|    correctness err:  " << false_positive_prob << std::endl;
 
     std::cout << "|tree parameters:      " << std::endl;
-    std::cout << "|    arity:            " << arity << std::endl;
+    std::cout << "|    arity:            " << TBFE_ARITY << std::endl;
     std::cout << "|    height:           " << height << std::endl;
     std::cout << "|    # of intervals:   " << num_intervals << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
@@ -656,6 +679,36 @@ namespace {
     std::sort(bench_data.begin(), bench_data.end());
     write_to_file(ofs, false_positive_prob, bench_data);
   }
+
+  void paper_benches_bfe_sizes(const std::string& filename) {
+    static constexpr unsigned all_sizes[] = {10000, 25000, 50000, 100000, 150000, 200000};
+    static constexpr double probability   = 0.001;
+
+    for (auto num_puncturings : all_sizes) {
+      std::ostringstream oss;
+      oss << filename << '_' << num_puncturings;
+      bench_bfe(oss.str(), num_puncturings, probability);
+    }
+  }
+
+  void paper_benches_tbfe(const std::string& filename) {
+    static constexpr unsigned int all_sizes[]  = {10000, 25000, 50000, 100000, 150000, 200000};
+    static constexpr unsigned int all_depths[] = {2, 3, 4, 8};
+    static constexpr double probability        = 0.001;
+
+    for (auto num_puncturings : all_sizes) {
+      for (auto depth : all_depths) {
+        if (num_puncturings * std::pow(TBFE_ARITY, depth) >= 10000000) {
+          continue;
+        }
+
+
+        std::ostringstream oss;
+        oss << filename << '_' << num_puncturings << '_' << depth;
+        bench_tbfe(oss.str(), num_puncturings, probability, depth);
+      }
+    }
+  }
 } // namespace
 
 int main(int argc, char** argv) {
@@ -690,7 +743,7 @@ int main(int argc, char** argv) {
 
   const auto unmatched = result.unmatched();
   if (unmatched.size() < 1) {
-    bench_bfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
+    bench_bfe(filename, result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
     bench_tbfe(filename, result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
                result["height"].as<unsigned int>());
     return 0;
@@ -698,7 +751,7 @@ int main(int argc, char** argv) {
 
   for (const auto& arg : unmatched) {
     if (arg == "bfe") {
-      bench_bfe(result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
+      bench_bfe(filename, result["num-elements"].as<unsigned int>(), result["prob"].as<double>());
     } else if (arg == "tbfe") {
       bench_tbfe(filename, result["num-elements"].as<unsigned int>(), result["prob"].as<double>(),
                  result["height"].as<unsigned int>());
@@ -710,6 +763,10 @@ int main(int argc, char** argv) {
       bench_tbfe_performance(filename, result["num-elements"].as<unsigned int>(),
                              result["prob"].as<double>(), result["height"].as<unsigned int>(),
                              intervals);
+    } else if (arg == "bfe-paper") {
+      paper_benches_bfe_sizes(filename);
+    } else if (arg == "tbfe-paper") {
+      paper_benches_tbfe(filename);
     } else {
       std::cout << "Unknown benchmark: " << arg
                 << " - valid benchmarks are 'bfe', 'tbfe' and 'tbfe-perf'." << std::endl;
