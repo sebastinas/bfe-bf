@@ -31,7 +31,7 @@ License
 -------
 
 The code is licensed under the CC0 license and was written by Sebastian Ramacher (AIT Austrian
-Institute of Technolgy) and Erkan Tairi while at AIT. This work has been partially funded by the
+Institute of Technology) and Erkan Tairi while at AIT. This work has been partially funded by the
 "ICT of the Future" Program of the FFG and the BMVIT as part of [IoT4CPS](https://iot4cps.at) and by
 the EU projects [SECREDAS](https://secredas-project.eu/), [COMP4DRONES](https://www.comp4drones.eu),
 [LABYRINTH](https://labyrinth2020.eu/). This project has received funding from the European Union’s
