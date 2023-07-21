@@ -2120,7 +2120,7 @@ int tbfe_bbg_encaps(uint8_t* key, tbfe_bbg_ciphertext_t* ciphertext,
   const unsigned int k = public_key->bloom_filter_hashes;
 
   // Do generation of k-ciphertexts in parallel
-#pragma omp parallel reduction(| : result_status)
+#pragma omp parallel reduction(| : result_status) num_threads((k+1)/2)
   {
     int ret = BFE_SUCCESS;
 
